@@ -44,8 +44,9 @@ export const COLLECTIONS: Collection[] = [
     source: `Seven pixel layers and five colours from an on-chain seed. Leave all traits to chance, or pin up to ${FACES_MAX_PINS} traits and colours for a fee that starts at ${FACES_FIRST_PIN_ETH} ETH and doubles with every pin, up to ${FACES_ALL_PINS_ETH} ETH. Rare and legendary traits cannot be pinned. The collection ends at ${FACES_MAX.toLocaleString("en-US")} faces.`,
     pixel: true,
     repo: "https://github.com/pawelorzech/onenft-faces",
-    contract: "0x37747e1c6221848807B2fA060dbf4Be798361752",
-    opensea: "https://opensea.io/collection/faces-onenft-click",
+    contract: "0x7C745F4eA367A7A3CD596219A4E428F2eA9A8C4c",
+    // The second Faces contract (2026-09-06); OpenSea has not named its collection yet, so the link goes to the contract's assets.
+    opensea: "https://opensea.io/assets/base/0x7C745F4eA367A7A3CD596219A4E428F2eA9A8C4c/1",
   },
   {
     slug: "knot",
