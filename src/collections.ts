@@ -7,6 +7,7 @@
  * GET /api/holder/<0x… or name.eth> lists that wallet's tokens (`days` with a
  * `day` for daily ones, `faces` with an `id` for rolls), resolves the ENS name
  * itself, and serves each image at the `image` URL with `access-control-allow-origin: *`.
+ * Daily sites also answer /api/summary (today, tally, palette, freshness); rolls answer /api/state.
  */
 export type Collection = {
   slug: string;
@@ -27,14 +28,20 @@ export type Collection = {
   opensea: string;
 };
 
+/** Faces facts the hub states. They mirror faces.onenft.click/spec.json (maxSupply, maxPins, pinPricesEth); a test checks the live spec against them. */
+export const FACES_MAX = 10000;
+export const FACES_MAX_PINS = 12;
+export const FACES_FIRST_PIN_ETH = "0.0005";
+export const FACES_ALL_PINS_ETH = "1.024";
+
 export const COLLECTIONS: Collection[] = [
   {
     slug: "faces",
     kind: "rolls",
     name: "Faces",
     host: "faces.onenft.click",
-    line: "One face a day per wallet.",
-    source: "Rolled on chain from a seed: seven pixel layers and five colours. Pin up to three things for a small fee; rare things and the one of ones come only from luck. 10,000 faces, then it stops.",
+    line: "Roll one face per wallet each UTC day.",
+    source: `Seven pixel layers and five colours from an on-chain seed. Leave all traits to chance, or pin up to ${FACES_MAX_PINS} traits and colours for a fee that starts at ${FACES_FIRST_PIN_ETH} ETH and doubles with every pin, up to ${FACES_ALL_PINS_ETH} ETH. Rare and legendary traits cannot be pinned. The collection ends at ${FACES_MAX.toLocaleString("en-US")} faces.`,
     pixel: true,
     repo: "https://github.com/pawelorzech/onenft-faces",
     contract: "0x37747e1c6221848807B2fA060dbf4Be798361752",
