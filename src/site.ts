@@ -414,7 +414,7 @@ function walletSection(s: WalletState): string {
   if (!n) return `<section class="wcoll" id="${c.slug}" aria-labelledby="w-${c.slug}">${head}${note}<p class="small">Nothing here yet.</p></section>`;
   const tiles = s.tokens.map((t) => {
     const d = `data-id="${t.id}" data-unit="${t.unit}" data-src="${esc(t.image)}" data-prefix="${c.slug}" data-pixel="${c.pixel ? 1 : 0}"${t.bg ? ` data-bg="${esc(t.bg)}"` : ""}`;
-    const png = t.image.replace(/\.svg$/, "-1024.png");
+    const png = t.image.replace(/\.svg(\?.*)?$/, "-1024.png$1");
     return `<div class="tile"><a href="${esc(t.url)}"><img src="${esc(t.image)}" alt="${esc(t.label)}" loading="lazy"${c.pixel ? ' class="pixel"' : ""}></a><div class="cap"><a href="${esc(t.url)}">${esc(t.caption)}</a></div><div class="get"><a href="${esc(t.image)}" download="${c.slug}-${t.unit}-${t.id}.svg" data-dl="svg" ${d} aria-label="Download SVG of ${esc(t.label)}">SVG</a><a href="${esc(png)}" download="${c.slug}-${t.unit}-${t.id}-1024.png" data-dl="png" ${d} aria-label="Download PNG of ${esc(t.label)}">PNG</a><a href="${esc(png)}" data-dl="jpeg" ${d} hidden data-js aria-label="Download JPEG of ${esc(t.label)}">JPEG</a></div></div>`;
   });
   return `<section class="wcoll" id="${c.slug}" aria-labelledby="w-${c.slug}">${head}${note}<div class="strip">${tiles.join("")}</div></section>`;
