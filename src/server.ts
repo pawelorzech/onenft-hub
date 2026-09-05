@@ -7,8 +7,8 @@ const PORT = Number(process.env.PORT ?? 3000);
 export const KNOT = "https://knot.onenft.click";
 
 const html = (s: string, status = 200) =>
-  new Response(s, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=60" } });
-const json = (o: unknown, maxAge = 60) =>
+  new Response(s, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+const json = (o: unknown, maxAge = 15) =>
   new Response(JSON.stringify(o, null, 1), { headers: { "content-type": "application/json; charset=utf-8", "cache-control": `public, max-age=${maxAge}`, "access-control-allow-origin": "*" } });
 const redirect = (to: string) => new Response(null, { status: 301, headers: { location: to } });
 
@@ -30,12 +30,14 @@ export async function handle(req: Request): Promise<Response> {
         slug: s.c.slug,
         name: s.c.name,
         url: `https://${s.c.host}/`,
-        api: `https://${s.c.host}/api/today`,
+        kind: s.c.kind,
+        api: s.c.kind === "rolls" ? `https://${s.c.host}/api/state` : `https://${s.c.host}/api/today`,
         contract: s.c.contract,
         chainId: 8453,
         repo: s.c.repo,
         today: s.today,
         tally: s.tally,
+        rolls: s.rolls ?? null,
       })),
     });
   }

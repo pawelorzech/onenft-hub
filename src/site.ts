@@ -123,6 +123,12 @@ ${ANALYTICS}
 
 function stateLine(s: CollectionState): string {
   const t = s.today;
+  if (s.c.kind === "rolls") {
+    if (!s.rolls) return `<p class="small">The site did not answer. <a href="https://${s.c.host}">Open it</a>.</p>`;
+    if (!t) return `<p>Nobody has rolled yet.</p>`;
+    const who = t.state === "author" ? "the treasury's daily roll" : `rolled by ${esc(t.ownerName ?? shortAddr(t.owner ?? ""))}`;
+    return `<p><span class="syne" style="font-weight:700">Face #${num(t.day)}</span>, the newest, ${who}.</p>`;
+  }
   if (!t) return `<p class="small">The site did not answer. <a href="https://${s.c.host}">Open it</a>.</p>`;
   const who = t.state === "author" ? "the author's day" : t.state === "taken" ? `taken by ${esc(t.ownerName ?? shortAddr(t.owner ?? ""))}` : t.state === "free" ? "still nobody's, free to claim" : "today";
   return `<p><span class="syne" style="font-weight:700">Day ${num(t.day)}</span>, ${esc(t.date)}, ${who}.</p>`;
@@ -133,6 +139,11 @@ export function shortAddr(a: string): string {
 }
 
 function tallyBlock(s: CollectionState): string {
+  if (s.c.kind === "rolls") {
+    const r = s.rolls;
+    if (!r) return "";
+    return `<div class="tally syne"><div><b>${num(r.rolled)}</b><span>of ${num(r.max)} rolled</span></div><div><b>${num(r.poolLeft)}</b><span>1/1 left</span></div></div>`;
+  }
   const y = s.tally;
   if (!y) return "";
   return `<div class="tally syne"><div><b>${num(y.taken)}</b><span>${plural(y.taken, "day", "days")} taken</span></div><div><b>${num(y.gaps)}</b><span>${plural(y.gaps, "gap", "gaps")}</span></div><div><b>${num(y.author)}</b><span>author's</span></div></div>`;
@@ -142,8 +153,9 @@ function collectionBlock(s: CollectionState): string {
   const c = s.c;
   const img = s.today?.image ?? `https://${c.host}/today.svg`;
   const dayUrl = s.today?.url ?? `https://${c.host}/`;
+  const alt = c.kind === "rolls" ? `The newest face at ${c.host}` : `Today at ${c.host}`;
   return `<section class="coll" id="${c.slug}">
-<a href="https://${c.host}/"><img class="art${c.pixel ? " pixel" : ""}" src="${img}" alt="Today at ${c.host}" width="396" height="396"></a>
+<a href="https://${c.host}/"><img class="art${c.pixel ? " pixel" : ""}" src="${img}" alt="${alt}" width="396" height="396"></a>
 <div class="meta">
 <h2 class="syne">${esc(c.name)}</h2>
 <p>${esc(c.line)} ${esc(c.source)}</p>
@@ -151,9 +163,9 @@ ${stateLine(s)}
 ${tallyBlock(s)}
 <div class="ctas">
 <a class="cta syne" href="https://${c.host}/">Open ${c.host}</a>
-<a class="cta ghost syne" href="${dayUrl}">Today's page</a>
+<a class="cta ghost syne" href="${dayUrl}">${c.kind === "rolls" ? "Newest face" : "Today's page"}</a>
 </div>
-<p class="small"><a href="https://${c.host}/how">How it works</a> · <a href="${c.opensea}">OpenSea</a> · <a href="https://basescan.org/address/${c.contract}">Contract</a> · <a href="${c.repo}">Code</a></p>
+<p class="small"><a href="https://${c.host}/how">How it works</a> · <a href="${c.opensea}">OpenSea</a>${c.contract ? ` · <a href="https://basescan.org/address/${c.contract}">Contract</a>` : ""} · <a href="${c.repo}">Code</a></p>
 </div>
 </section>`;
 }
@@ -162,15 +174,17 @@ export function homePage(states: CollectionState[]): string {
   const p = pageColors(states);
   const taken = states.reduce((a, s) => a + (s.tally?.taken ?? 0), 0);
   const gaps = states.reduce((a, s) => a + (s.tally?.gaps ?? 0), 0);
+  const rolled = states.reduce((a, s) => a + (s.rolls?.rolled ?? 0), 0);
+  const daily = states.filter((s) => s.c.kind === "daily").length;
   const knot = states.find((s) => s.c.slug === PALETTE_SOURCE);
   const ogImage = knot?.today ? knot.today.image.replace(/\.svg$/, ".png") : "https://knot.onenft.click/today.png";
   const body = `<div class="page">
 <aside><div class="stick">
 <a class="mark syne" href="/">${SITE}</a>
 <h1 class="syne">One a day, on chain, forever.</h1>
-<p class="lead">${states.length} ${plural(states.length, "collection", "collections")} live here. Each one mints one token a day, drawn on chain from the clock of the Base chain. Nobody picks it and nobody can delay it. A day nobody claims stays empty forever.</p>
+<p class="lead">${states.length} ${plural(states.length, "collection", "collections")} live here, drawn on chain from the clock of the Base chain. ${daily} of them mint one token a day; a day nobody claims stays empty forever. One lets every wallet roll a face a day.</p>
 <hr>
-<div><div class="big syne">${num(taken)}</div><p class="small">${plural(taken, "day", "days")} taken across all collections, ${num(gaps)} ${plural(gaps, "gap", "gaps")}</p></div>
+<div><div class="big syne">${num(taken)}</div><p class="small">${plural(taken, "day", "days")} taken across the daily collections, ${num(gaps)} ${plural(gaps, "gap", "gaps")}${rolled ? `, ${num(rolled)} ${plural(rolled, "face", "faces")} rolled` : ""}</p></div>
 <hr>
 <nav class="small" style="display:flex;flex-direction:column;gap:6px">${states.map((s) => `<a href="#${s.c.slug}">${esc(s.c.name)}</a>`).join("")}<a href="#format">The format</a></nav>
 </div></aside>
@@ -178,7 +192,7 @@ export function homePage(states: CollectionState[]): string {
 ${states.map(collectionBlock).join("\n")}
 <div class="prose" id="format">
 <h2 class="syne">The format</h2>
-<p>Every collection here follows the same rules. One token a day, <code>tokenId</code> equal to the day number, day 1 on 5 September 2026. The day is <code>block.timestamp / 86400</code>, rounded down. The image is built by a renderer contract from the day number alone and returned as a <code>data:</code> URI. No server is in the loop and no file can go missing.</p>
+<p>The daily collections follow the same rules. One token a day, <code>tokenId</code> equal to the day number, day 1 on 5 September 2026. The day is <code>block.timestamp / 86400</code>, rounded down. The image is built by a renderer contract from the day number alone and returned as a <code>data:</code> URI. No server is in the loop and no file can go missing.</p>
 <ul>
 <li>Free to claim, gas only. No price, no royalties, no allowlist. Not an investment.</li>
 <li>Every tenth day up to day 1000 goes to the author. That is the whole cut, written into the contract on day one.</li>
@@ -186,6 +200,7 @@ ${states.map(collectionBlock).join("\n")}
 <li>Everything is CC0: images, generators, contracts, sites.</li>
 <li>The token contract is the same in every collection: <a href="${TOKEN_CONTRACT}">OneNFT.sol</a>. Only the renderer differs, and only the renderer can be swapped, for future days only.</li>
 </ul>
+<p><strong>Faces</strong> breaks the format on purpose: one roll per wallet a day instead of one token a day, pins for a small fee, a cap of 10,000, and a pool of one of ones that empties with the supply. Its rules are on <a href="https://faces.onenft.click/how">its own how page</a>.</p>
 <p>Each site has a <code>/how</code> page that writes the draw out in full so you can port it to any language, a <code>/spec.json</code> with the tables, and a JSON API at <code>/api/today</code>, <code>/api/day/N</code> and <code>/api/days</code>. This page reads those. Its own list is at <a href="/api/collections.json">/api/collections.json</a>.</p>
 <p>The page borrows its colors from the knot of the day, the way each collection borrows from its own day. There is no light or dark mode.</p>
 <h2 class="syne">Start one</h2>

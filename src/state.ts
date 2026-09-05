@@ -19,15 +19,18 @@ export type Today = {
 };
 
 export type Tally = { taken: number; gaps: number; author: number };
+/** For "rolls" collections: how many rolled of the cap, and what is left in the 1/1 pool. */
+export type Rolls = { rolled: number; max: number; poolLeft: number };
 
 export type CollectionState = {
   c: Collection;
   today: Today | null;
   tally: Tally | null;
+  rolls?: Rolls | null;
   fetchedAt: number;
 };
 
-const TTL_MS = Number(process.env.STATE_TTL_MS ?? 60_000);
+const TTL_MS = Number(process.env.STATE_TTL_MS ?? 20_000);
 const TIMEOUT_MS = 6_000;
 
 const cache = new Map<string, CollectionState>();
@@ -69,10 +72,32 @@ export function tallyOf(days: any[]): Tally {
   return { taken, gaps, author };
 }
 
+/** The newest face as a "today", so the block renders like the others. */
+export function newestOf(j: any, host: string): Today | null {
+  const f = j?.recent?.[0];
+  if (!f) return null;
+  return { day: Number(f.id), date: "", state: f.treasury ? "author" : "taken", ownerName: f.ownerName ?? null, owner: f.owner ?? null, image: String(f.image), url: String(f.url), bg: null, fg: null };
+}
+export function rollsOf(j: any): Rolls {
+  return { rolled: Number(j?.totalSupply ?? 0), max: Number(j?.maxSupply ?? 10000), poolLeft: Number(j?.poolLeft ?? 0) };
+}
+
+/** One snapshot per collection: for daily ones /api/days feeds both the tile (its last entry) and the tally, so they never disagree. */
 async function load(c: Collection): Promise<CollectionState> {
   const base = `https://${c.host}`;
-  const [t, d] = await Promise.all([getJson(`${base}/api/today`), getJson(`${base}/api/days`)]);
-  return { c, today: todayOf(t), tally: tallyOf(d.days ?? []), fetchedAt: Date.now() };
+  if (c.kind === "rolls") {
+    const j = await getJson(`${base}/api/state`);
+    return { c, today: newestOf(j, c.host), tally: null, rolls: rollsOf(j), fetchedAt: Date.now() };
+  }
+  const d = await getJson(`${base}/api/days`);
+  const days: any[] = d.days ?? [];
+  const last = days[days.length - 1];
+  const today = last ? todayOf({ ...last, url: `${base}/day/${last.day}`, palette: last.palette }) : null;
+  if (today && !today.bg) {
+    // the day list carries no colours; one extra read for the palette source only
+    try { const t = await getJson(`${base}/api/today`); const { bg, fg } = colorsOf(t); today.bg = bg; today.fg = fg; } catch {}
+  }
+  return { c, today, tally: tallyOf(days), fetchedAt: Date.now() };
 }
 
 export async function stateOf(c: Collection): Promise<CollectionState> {

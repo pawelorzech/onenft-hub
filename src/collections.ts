@@ -4,6 +4,8 @@
  */
 export type Collection = {
   slug: string;
+  /** "daily": one token a day, read from /api/today and /api/days. "rolls": one roll per wallet a day, read from /api/state. */
+  kind: "daily" | "rolls";
   /** Short name shown on the page. */
   name: string;
   /** Host of the collection's own site. Its /api/today and /api/days feed this page. */
@@ -22,6 +24,7 @@ export type Collection = {
 export const COLLECTIONS: Collection[] = [
   {
     slug: "knot",
+    kind: "daily",
     name: "Knot",
     host: "knot.onenft.click",
     line: "One Truchet knot a day.",
@@ -33,6 +36,7 @@ export const COLLECTIONS: Collection[] = [
   },
   {
     slug: "blit",
+    kind: "daily",
     name: "Blit",
     host: "blit.onenft.click",
     line: "One Blitmap remix a day.",
@@ -44,6 +48,7 @@ export const COLLECTIONS: Collection[] = [
   },
   {
     slug: "chainrun",
+    kind: "daily",
     name: "Chain Run",
     host: "chainrun.onenft.click",
     line: "One Chain Runner a day.",
@@ -52,6 +57,18 @@ export const COLLECTIONS: Collection[] = [
     repo: "https://github.com/pawelorzech/onenft-chainrun",
     contract: "0x748b55c3762FE2a697DC268eD19743e22481Bb58",
     opensea: "https://opensea.io/collection/chainrun-onenft-click",
+  },
+  {
+    slug: "faces",
+    kind: "rolls",
+    name: "Faces",
+    host: "faces.onenft.click",
+    line: "One face a day per wallet.",
+    source: "Rolled on chain from a seed: seven pixel layers and five colours. Pin up to three things for a small fee; rare things and the one of ones come only from luck. 10,000 faces, then it stops.",
+    pixel: true,
+    repo: "https://github.com/pawelorzech/onenft-faces",
+    contract: "",
+    opensea: "https://opensea.io/collection/faces-onenft-click",
   },
 ];
 
