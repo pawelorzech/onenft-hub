@@ -88,7 +88,7 @@ test("tokens normalize daily days and rolled faces the same way", () => {
 test("wallet page: Faces first, one section per collection, three chips per token, a failed site is marked", () => {
   const h = walletPage(states(), wallet(), A);
   expect(h.indexOf('id="faces"')).toBeLessThan(h.indexOf('id="knot"'));
-  expect(h).toContain("<h1 class=\"syne\">pawelorzech.eth</h1>");
+  expect(h).toContain('<span class="wname" style="font-size:26px">pawelorzech<wbr>.eth</span>');
   expect(h).toContain(">3</div>");
   expect(h).toContain("1 face, 2 knots, 0 blits");
   expect((h.match(/data-dl="png"/g) ?? []).length).toBe(3);

@@ -77,6 +77,7 @@ footer nav{display:flex;gap:20px;flex-wrap:wrap}
 .field{height:50px;padding:0 14px;border:1px solid var(--line);background:transparent;color:var(--fg);width:100%;font-family:ui-monospace,Menlo,monospace;font-size:14px}
 .field::placeholder{color:var(--muted)}
 .msg{font-size:15px;color:var(--muted);min-height:1.5em;margin:0}
+.wname{overflow-wrap:normal;word-break:keep-all}
 .wcoll{padding:34px 34px 30px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:18px}
 .wcoll .head{display:flex;justify-content:space-between;align-items:baseline;gap:20px;flex-wrap:wrap}
 .wcoll h2{font-weight:800;font-size:34px;line-height:.95;letter-spacing:-.03em;margin:0}
@@ -242,19 +243,25 @@ export const SIZES = [1024, 2048, 4096];
 /**
  * Connect button: asks the wallet for an account and opens that wallet's page.
  * `base` is the path the address is appended to ("/" here, "/wallet/" on the hub).
- * Also fills the "last time here" link from the browser's memory.
+ * A wallet that already granted this site an account (eth_accounts, no prompt) is
+ * recognized on load: the entry page goes straight to it, other pages show the
+ * link. The last address is also kept in the browser for the "last time" link.
  */
-export function connectScript(base = "/"): string {
+export function connectScript(base = "/", entry = false): string {
   return `<script>
 (function(){
-var BASE=${JSON.stringify(base)};var KEY='onenft_who';var btn=document.getElementById('connect');var out=document.getElementById('msg');var last=document.getElementById('last');
+var BASE=${JSON.stringify(base)};var ENTRY=${entry ? "true" : "false"};var KEY='onenft_who';var btn=document.getElementById('connect');var out=document.getElementById('msg');var last=document.getElementById('last');
 function say(t){if(out)out.textContent=t}
+function here(a){return location.pathname.toLowerCase()===(BASE+a).toLowerCase()}
+function remember(a){try{localStorage.setItem(KEY,a)}catch(e){}}
+function offer(a,label){if(!last||here(a))return;var l=last.querySelector('a');l.href=BASE+a;l.textContent=a.slice(0,6)+'\\u2026'+a.slice(-4);last.firstChild.textContent=label+': ';last.hidden=false}
 var who=null;try{who=localStorage.getItem(KEY)}catch(e){}
-if(last&&who&&/^0x[0-9a-fA-F]{40}$/.test(who)&&location.pathname.toLowerCase()!==(BASE+who).toLowerCase()){var a=last.querySelector('a');a.href=BASE+who;a.textContent=who.slice(0,6)+'\\u2026'+who.slice(-4);last.hidden=false}
+if(who&&/^0x[0-9a-fA-F]{40}$/.test(who))offer(who,'Last time here');
 if(!btn)return;var eth=window.ethereum;
 if(!eth||!eth.request){btn.disabled=true;btn.textContent='No wallet in this browser';return}
-btn.addEventListener('click',async function(){btn.disabled=true;
-  try{var accs=await eth.request({method:'eth_requestAccounts'});if(!accs||!accs.length)throw new Error('the wallet gave no account');var acc=accs[0];try{localStorage.setItem(KEY,acc)}catch(e){}location.href=BASE+acc}
+eth.request({method:'eth_accounts'}).then(function(accs){if(!accs||!accs.length)return;var a=accs[0];remember(a);if(here(a)){btn.textContent='This is your wallet';btn.disabled=true;return}if(ENTRY){location.replace(BASE+a);return}btn.textContent='Your wallet';btn.onclick=function(){location.href=BASE+a};offer(a,'Connected')}).catch(function(){});
+btn.addEventListener('click',async function(){if(btn.onclick)return;btn.disabled=true;
+  try{var accs=await eth.request({method:'eth_requestAccounts'});if(!accs||!accs.length)throw new Error('the wallet gave no account');var acc=accs[0];remember(acc);location.href=BASE+acc}
   catch(e){say(e&&e.code===4001?'Cancelled in the wallet.':'Failed: '+((e&&e.message)||e));btn.disabled=false}});
 })();
 </script>`;
@@ -299,6 +306,13 @@ document.querySelectorAll('[data-dl]').forEach(function(el){el.addEventListener(
 </script>`;
 }
 
+
+/** A wallet name or address in a heading: smaller when long, and it may break only before a dot. */
+export function nameHeading(name: string): string {
+  const size = name.length <= 11 ? "" : name.length <= 16 ? ' style="font-size:26px"' : ' style="font-size:20px;letter-spacing:-.02em"';
+  return `<span class="wname"${size}>${esc(name).replace(/\./g, "<wbr>.")}</span>`;
+}
+
 /** Where /go?who=... sends a typed address or ENS name. Anything else goes back to the form. */
 export function goTarget(who: string | null, base = "/", back = "/yours"): string {
   const w = (who ?? "").trim();
@@ -339,7 +353,8 @@ export function walletPage(states: CollectionState[], wallet: Wallet | null, han
   const p = pageColors(states);
   const total = wallet ? wallet.states.reduce((a, s) => a + s.tokens.length, 0) : 0;
   const parts = wallet ? wallet.states.filter((s) => s.ok).map((s) => `${s.tokens.length} ${unit(s.c, s.tokens.length)}`).join(", ") : "";
-  const title = wallet ? esc(wallet.name ?? (wallet.address ? shortAddr(wallet.address) : handle)) : "Your wallet";
+  const rawName = wallet ? wallet.name ?? (wallet.address ? shortAddr(wallet.address) : handle) : "Your wallet";
+  const title = wallet ? nameHeading(rawName) : "Your wallet";
   const sizes = `<div><p class="small" style="margin:0 0 8px">PNG and JPEG size</p><div class="sizes" role="group" aria-label="Image size">${SIZES.map((s) => `<button type="button" data-size="${s}" aria-pressed="${s === 2048}">${s}</button>`).join("")}</div></div>`;
   const body = `<div class="page">
 <aside><div class="stick">
@@ -358,7 +373,7 @@ ${wallet ? wallet.states.map(walletSection).join("\n") : states.map((s) => `<sec
 <footer><span>This is not an investment and never will be. Everything is CC0.${wallet?.address ? ` <a href="/api/wallet/${wallet.address}.json">JSON</a>` : ""}</span><nav>${COLLECTIONS.map((c) => `<a href="https://${c.host}">${esc(c.name)}</a>`).join("")}<a href="/">Home</a></nav></footer>
 </main>
 </div>
-${connectScript("/wallet/")}
+${connectScript("/wallet/", !wallet)}
 ${wallet && total ? downloadScript("onenft", false) : ""}`;
-  return layout(`${wallet ? title : "Your wallet"}, ${SITE}`, p, body, "https://knot.onenft.click/today.png");
+  return layout(`${esc(rawName)}, ${SITE}`, p, body, "https://knot.onenft.click/today.png");
 }
