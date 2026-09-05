@@ -96,6 +96,8 @@ button.cta[disabled]{opacity:.55;cursor:default}
 .coll .art.pixel{image-rendering:pixelated}
 .coll .meta{display:flex;flex-direction:column;gap:18px;padding-top:6px}
 .coll h2{font-weight:800;font-size:44px;line-height:.95;letter-spacing:-.03em;margin:0}
+.coll h2 a{text-decoration:none}
+.coll h2 a:hover{text-decoration:underline;text-underline-offset:6px}
 .coll p{margin:0}
 .coll .ctas{display:flex;flex-direction:column;gap:10px;max-width:360px}
 .coll .cta{min-height:50px;font-size:17px}
@@ -261,7 +263,7 @@ function collectionBlock(s: CollectionState, i: number): string {
   return `<section class="coll" id="${c.slug}" aria-labelledby="h-${c.slug}">
 <a href="${tokenUrl ?? `https://${c.host}/`}" aria-label="${esc(alt)}"><img class="art${c.pixel ? " pixel" : ""}" src="${esc(img)}" alt="" width="396" height="396"${i === 0 ? ' fetchpriority="high"' : ' loading="lazy"'}></a>
 <div class="meta">
-<h2 class="syne" id="h-${c.slug}">${esc(c.name)}</h2>
+<h2 class="syne" id="h-${c.slug}"><a href="https://${c.host}/">${esc(c.name)}</a></h2>
 <p>${esc(c.line)} ${esc(c.source)}</p>
 ${stateLine(s)}
 ${tallyBlock(s)}
