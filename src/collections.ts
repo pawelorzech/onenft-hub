@@ -67,7 +67,7 @@ export const COLLECTIONS: Collection[] = [
     source: "Rolled on chain from a seed: seven pixel layers and five colours. Pin up to three things for a small fee; rare things and the one of ones come only from luck. 10,000 faces, then it stops.",
     pixel: true,
     repo: "https://github.com/pawelorzech/onenft-faces",
-    contract: "",
+    contract: "0x37747e1c6221848807B2fA060dbf4Be798361752",
     opensea: "https://opensea.io/collection/faces-onenft-click",
   },
 ];
