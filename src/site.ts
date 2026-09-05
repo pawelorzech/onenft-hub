@@ -99,7 +99,6 @@ button.cta[disabled]{opacity:.55;cursor:default}
 .coll p{margin:0}
 .coll .ctas{display:flex;flex-direction:column;gap:10px;max-width:360px}
 .coll .cta{min-height:50px;font-size:17px}
-.coll .cta .host{font-weight:400;font-size:14px;margin-left:8px;opacity:.85}
 .status{font-size:15px;color:var(--muted)}
 .tally{display:flex;gap:28px;flex-wrap:wrap}
 .tally b{display:block;font-weight:700;font-size:28px;line-height:1}
@@ -146,6 +145,9 @@ footer nav{display:flex;gap:6px 20px;flex-wrap:wrap}
 .crumb li{display:flex;gap:10px;align-items:baseline}
 .crumb .sep{color:var(--line);font-weight:800;font-size:20px}
 .crumb span[aria-current]{color:var(--muted);font-size:16px}
+.top nav a,.nav a,.sitenav a,footer nav a,.links a,.cats a{font-family:"Syne",system-ui,sans-serif;font-weight:700;font-size:14px;letter-spacing:.01em;text-decoration:none;color:var(--muted)}
+.top nav a:hover,.nav a:hover,.sitenav a:hover,footer nav a:hover,.links a:hover,.cats a:hover{color:var(--fg);text-decoration:underline;text-underline-offset:4px}
+.top nav,.sitenav,footer nav,.links{gap:2px 24px}
 @media (max-width:1180px){
  .coll{grid-template-columns:1fr}
  .coll .art{max-width:460px}
@@ -265,9 +267,10 @@ ${stateLine(s)}
 ${tallyBlock(s)}
 ${freshness(s)}
 <div class="ctas">
-<a class="cta syne" href="https://${c.host}/">Explore ${esc(c.name)}<span class="host">${c.host}</span></a>
+<a class="cta syne" href="https://${c.host}/">Explore ${esc(c.name)}</a>
 ${tokenUrl ? `<a class="cta ghost syne" href="${esc(tokenUrl)}">${c.kind === "rolls" ? `Face #${num(s.today!.day)}` : `Day ${num(s.today!.day)}`}, the one above</a>` : ""}
 </div>
+<p class="small">${c.host}</p>
 <nav class="links small" aria-label="${esc(c.name)} links"><a href="https://${c.host}/how">How it works</a><a href="https://${c.host}/yours">Your ${c.kind === "rolls" ? "faces" : "days"}</a><a href="${c.opensea}">OpenSea</a>${c.contract ? `<a href="https://basescan.org/address/${c.contract}">Contract</a>` : ""}<a href="${c.repo}">Code</a></nav>
 </div>
 </section>`;
