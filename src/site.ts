@@ -180,7 +180,7 @@ const DESCRIPTION = `${COLLECTIONS.length} on-chain collections on Base. ${daily
 
 /** `path` is the page's own path; a wallet page is not indexed, since it names an address. */
 export function layout(title: string, p: Colors, body: string, image: string, path = "/", index = true, description?: string): string {
-  const alt = title.replace(/, ${SITE}$/, "") + " on " + SITE;
+  const alt = "Today's knot at knot.onenft.click, the card of " + SITE;
   return `<!doctype html>
 <html lang="en">
 <head>
