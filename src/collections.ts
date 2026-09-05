@@ -1,6 +1,12 @@
 /**
  * The table of daily collections. Adding one is one entry here; the site,
- * the JSON and the tests read this table and nothing else.
+ * the JSON and the tests read this table and nothing else. The order here is
+ * the order on every page: Faces first (decided 2026-09-05), then the rest.
+ *
+ * Every collection site keeps one contract for the wallet page here:
+ * GET /api/holder/<0x… or name.eth> lists that wallet's tokens (`days` with a
+ * `day` for daily ones, `faces` with an `id` for rolls), resolves the ENS name
+ * itself, and serves each image at the `image` URL with `access-control-allow-origin: *`.
  */
 export type Collection = {
   slug: string;
@@ -22,6 +28,18 @@ export type Collection = {
 };
 
 export const COLLECTIONS: Collection[] = [
+  {
+    slug: "faces",
+    kind: "rolls",
+    name: "Faces",
+    host: "faces.onenft.click",
+    line: "One face a day per wallet.",
+    source: "Rolled on chain from a seed: seven pixel layers and five colours. Pin up to three things for a small fee; rare things and the one of ones come only from luck. 10,000 faces, then it stops.",
+    pixel: true,
+    repo: "https://github.com/pawelorzech/onenft-faces",
+    contract: "0x37747e1c6221848807B2fA060dbf4Be798361752",
+    opensea: "https://opensea.io/collection/faces-onenft-click",
+  },
   {
     slug: "knot",
     kind: "daily",
@@ -57,18 +75,6 @@ export const COLLECTIONS: Collection[] = [
     repo: "https://github.com/pawelorzech/onenft-chainrun",
     contract: "0x748b55c3762FE2a697DC268eD19743e22481Bb58",
     opensea: "https://opensea.io/collection/chainrun-onenft-click",
-  },
-  {
-    slug: "faces",
-    kind: "rolls",
-    name: "Faces",
-    host: "faces.onenft.click",
-    line: "One face a day per wallet.",
-    source: "Rolled on chain from a seed: seven pixel layers and five colours. Pin up to three things for a small fee; rare things and the one of ones come only from luck. 10,000 faces, then it stops.",
-    pixel: true,
-    repo: "https://github.com/pawelorzech/onenft-faces",
-    contract: "0x37747e1c6221848807B2fA060dbf4Be798361752",
-    opensea: "https://opensea.io/collection/faces-onenft-click",
   },
 ];
 

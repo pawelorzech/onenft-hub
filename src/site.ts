@@ -6,8 +6,8 @@
  * Copy rules: plain words, active voice, no adverbs, no em dashes, nothing a
  * reader could misunderstand. Facts (numbers, addresses, paths) stay exact.
  */
-import { COLLECTIONS, PALETTE_SOURCE } from "./collections.ts";
-import type { CollectionState } from "./state.ts";
+import { COLLECTIONS, PALETTE_SOURCE, type Collection } from "./collections.ts";
+import type { CollectionState, Wallet, WalletState } from "./state.ts";
 
 export const SITE = "onenft.click";
 export const REPO = "https://github.com/pawelorzech/onenft-hub";
@@ -72,12 +72,35 @@ hr{border:0;border-top:1px solid var(--line);margin:0;width:100%}
 .prose ul{margin:0;padding-left:22px}
 footer{padding:26px 34px;display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;color:var(--muted);font-size:16px;border-top:1px solid var(--line)}
 footer nav{display:flex;gap:20px;flex-wrap:wrap}
+.who{display:flex;flex-direction:column;gap:10px}
+.who .cta{font-size:17px;height:50px}
+.field{height:50px;padding:0 14px;border:1px solid var(--line);background:transparent;color:var(--fg);width:100%;font-family:ui-monospace,Menlo,monospace;font-size:14px}
+.field::placeholder{color:var(--muted)}
+.msg{font-size:15px;color:var(--muted);min-height:1.5em;margin:0}
+.wcoll{padding:34px 34px 30px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:18px}
+.wcoll .head{display:flex;justify-content:space-between;align-items:baseline;gap:20px;flex-wrap:wrap}
+.wcoll h2{font-weight:800;font-size:34px;line-height:.95;letter-spacing:-.03em;margin:0}
+.wcoll h2 span{font-weight:400;font-size:17px;color:var(--muted);letter-spacing:0;margin-left:12px;font-family:"Newsreader",Georgia,serif}
+.strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px}
+.strip .tile{display:flex;flex-direction:column;gap:6px}
+.strip img{width:100%;aspect-ratio:1;display:block;box-shadow:0 0 0 1px var(--line)}
+.strip img.pixel{image-rendering:pixelated}
+.strip .cap{font-size:14px;color:var(--muted)}
+.strip .cap a{text-decoration:none}
+.get{display:flex;gap:6px}
+.get a{display:inline-flex;align-items:center;justify-content:center;height:30px;padding:0 9px;border:1px solid var(--line);color:var(--muted);text-decoration:none;font-size:13px;font-weight:700;font-family:"Syne",system-ui,sans-serif}
+.get a:hover{border-color:var(--fg);color:var(--fg)}
+.sizes{display:flex;border:1px solid var(--line)}
+.sizes button{flex:1;height:40px;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--muted);border:0;border-right:1px solid var(--line);background:transparent;font-family:"Syne",system-ui,sans-serif;cursor:pointer}
+.sizes button:last-child{border-right:0}
+.sizes button[aria-pressed="true"]{background:var(--soft);color:var(--fg);font-weight:700}
 @media (max-width:1180px){
  .coll{grid-template-columns:1fr}
  .coll .art{max-width:460px}
  .coll .meta{max-width:520px}
 }
 @media (max-width:900px){
+ .wcoll{padding:20px}
  .page{grid-template-columns:1fr}
  aside{border-right:0;border-bottom:1px solid var(--line);padding:18px 20px}
  aside .stick{position:static;gap:18px}
@@ -186,7 +209,7 @@ export function homePage(states: CollectionState[]): string {
 <hr>
 <div><div class="big syne">${num(taken)}</div><p class="small">${plural(taken, "day", "days")} taken across the daily collections, ${num(gaps)} ${plural(gaps, "gap", "gaps")}${rolled ? `, ${num(rolled)} ${plural(rolled, "face", "faces")} rolled` : ""}</p></div>
 <hr>
-<nav class="small" style="display:flex;flex-direction:column;gap:6px">${states.map((s) => `<a href="#${s.c.slug}">${esc(s.c.name)}</a>`).join("")}<a href="#format">The format</a></nav>
+<nav class="small" style="display:flex;flex-direction:column;gap:6px">${states.map((s) => `<a href="#${s.c.slug}">${esc(s.c.name)}</a>`).join("")}<a href="#format">The format</a><a href="/wallet">Your wallet</a></nav>
 </div></aside>
 <main>
 ${states.map(collectionBlock).join("\n")}
@@ -206,8 +229,136 @@ ${states.map(collectionBlock).join("\n")}
 <h2 class="syne">Start one</h2>
 <p>Take <a href="${TOKEN_CONTRACT}">the token contract</a>, write a renderer, and point the site code at it. The three repos above are the worked examples. If you ship one, say so and it can be listed here.</p>
 </div>
-<footer><span>This is not an investment and never will be. Everything is CC0.</span><nav>${COLLECTIONS.map((c) => `<a href="https://${c.host}">${esc(c.name)}</a>`).join("")}<a href="/api/collections.json">JSON</a><a href="${REPO}">Code</a></nav></footer>
+<footer><span>This is not an investment and never will be. Everything is CC0.</span><nav><a href="/wallet">Your wallet</a>${COLLECTIONS.map((c) => `<a href="https://${c.host}">${esc(c.name)}</a>`).join("")}<a href="/api/collections.json">JSON</a><a href="${REPO}">Code</a></nav></footer>
 </main>
 </div>`;
   return layout(`${SITE}, one a day, on chain`, p, body, ogImage);
+}
+
+// ---- wallet page: connect, downloads, routing helpers (kept in step with the collection sites)
+
+export const SIZES = [1024, 2048, 4096];
+
+/**
+ * Connect button: asks the wallet for an account and opens that wallet's page.
+ * `base` is the path the address is appended to ("/" here, "/wallet/" on the hub).
+ * Also fills the "last time here" link from the browser's memory.
+ */
+export function connectScript(base = "/"): string {
+  return `<script>
+(function(){
+var BASE=${JSON.stringify(base)};var KEY='onenft_who';var btn=document.getElementById('connect');var out=document.getElementById('msg');var last=document.getElementById('last');
+function say(t){if(out)out.textContent=t}
+var who=null;try{who=localStorage.getItem(KEY)}catch(e){}
+if(last&&who&&/^0x[0-9a-fA-F]{40}$/.test(who)&&location.pathname.toLowerCase()!==(BASE+who).toLowerCase()){var a=last.querySelector('a');a.href=BASE+who;a.textContent=who.slice(0,6)+'\\u2026'+who.slice(-4);last.hidden=false}
+if(!btn)return;var eth=window.ethereum;
+if(!eth||!eth.request){btn.disabled=true;btn.textContent='No wallet in this browser';return}
+btn.addEventListener('click',async function(){btn.disabled=true;
+  try{var accs=await eth.request({method:'eth_requestAccounts'});if(!accs||!accs.length)throw new Error('the wallet gave no account');var acc=accs[0];try{localStorage.setItem(KEY,acc)}catch(e){}location.href=BASE+acc}
+  catch(e){say(e&&e.code===4001?'Cancelled in the wallet.':'Failed: '+((e&&e.message)||e));btn.disabled=false}});
+})();
+</script>`;
+}
+
+/**
+ * Downloads drawn in the browser. Fetches the SVG, sets its size to the pick,
+ * draws it on a canvas and saves PNG or JPEG. JPEG has no alpha, so it gets the
+ * day's background first. Pixel art turns smoothing off. data-dl="svg" saves the
+ * fetched file as is, for pages on another origin than the image.
+ */
+export function downloadScript(prefix = "onenft", pixel = false): string {
+  return `<script>
+(function(){
+var PREFIX=${JSON.stringify(prefix)};var PIXEL=${pixel ? "true" : "false"};var KEY='onenft_size';var SIZES=${JSON.stringify(SIZES)};
+var size=2048;try{var s=+localStorage.getItem(KEY);if(SIZES.indexOf(s)>=0)size=s}catch(e){}
+var out=document.getElementById('msg');function say(t){if(out)out.textContent=t}
+var picks=document.querySelectorAll('.sizes button');
+function paint(){picks.forEach(function(b){b.setAttribute('aria-pressed',String(+b.getAttribute('data-size')===size))})}
+picks.forEach(function(b){b.addEventListener('click',function(){size=+b.getAttribute('data-size');try{localStorage.setItem(KEY,String(size))}catch(e){}paint()})});paint();
+function save(blob,name){var a=document.createElement('a');var u=URL.createObjectURL(blob);a.href=u;a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(u);a.remove()},2000)}
+document.querySelectorAll('[data-dl]').forEach(function(el){el.addEventListener('click',async function(ev){
+  ev.preventDefault();var kind=el.getAttribute('data-dl');var n=el.getAttribute('data-day');var prefix=el.getAttribute('data-prefix')||PREFIX;
+  var pixel=el.hasAttribute('data-pixel')?el.getAttribute('data-pixel')==='1':PIXEL;var bg=el.getAttribute('data-bg')||'#000000';
+  var was=el.textContent;el.textContent='\\u2026';say('');
+  try{
+    var res=await fetch(el.getAttribute('data-src'));if(!res.ok)throw new Error('the image answered '+res.status);var text=await res.text();
+    if(kind==='svg'){save(new Blob([text],{type:'image/svg+xml'}),prefix+'-day-'+n+'.svg');return}
+    text=text.replace(/ width="\\d+" height="\\d+"/,' width="'+size+'" height="'+size+'"');
+    var u=URL.createObjectURL(new Blob([text],{type:'image/svg+xml'}));var img=new Image();
+    try{await new Promise(function(ok,no){img.onload=ok;img.onerror=function(){no(new Error('the browser could not draw the image'))};img.src=u})}finally{setTimeout(function(){URL.revokeObjectURL(u)},0)}
+    var c=document.createElement('canvas');c.width=size;c.height=size;var ctx=c.getContext('2d');ctx.imageSmoothingEnabled=!pixel;
+    if(kind==='jpeg'){ctx.fillStyle=bg;ctx.fillRect(0,0,size,size)}
+    ctx.drawImage(img,0,0,size,size);
+    var blob=await new Promise(function(ok){c.toBlob(ok,kind==='jpeg'?'image/jpeg':'image/png',0.92)});
+    if(!blob)throw new Error('the browser gave no file');
+    save(blob,prefix+'-day-'+n+'-'+size+(kind==='jpeg'?'.jpg':'.png'));
+  }catch(e){say('Download failed: '+((e&&e.message)||e))}
+  finally{el.textContent=was}
+})});
+})();
+</script>`;
+}
+
+/** Where /go?who=... sends a typed address or ENS name. Anything else goes back to the form. */
+export function goTarget(who: string | null, base = "/", back = "/yours"): string {
+  const w = (who ?? "").trim();
+  if (/^0x[0-9a-fA-F]{40}$/.test(w) || /^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.eth$/i.test(w)) return base + w;
+  return back;
+}
+
+// ---- the wallet page: one address, every collection
+
+/** What one token of each collection is called, for the counts in the sidebar. */
+const UNIT: Record<string, [string, string]> = { knot: ["knot", "knots"], blit: ["blit", "blits"], chainrun: ["runner", "runners"], faces: ["face", "faces"] };
+function unit(c: Collection, n: number): string {
+  const u = UNIT[c.slug] ?? ["token", "tokens"];
+  return plural(n, u[0], u[1]);
+}
+
+function walletSection(s: WalletState): string {
+  const c = s.c;
+  const n = s.tokens.length;
+  const head = `<div class="head"><h2 class="syne">${esc(c.name)}<span>${s.ok ? `${n} ${unit(c, n)}` : "did not answer"}</span></h2><a class="small" href="https://${c.host}/">Open ${c.host}</a></div>`;
+  if (!s.ok) return `<section class="wcoll" id="${c.slug}">${head}<p class="small">The site did not answer. Try again in a minute, or <a href="https://${c.host}/yours">look there</a>.</p></section>`;
+  if (!n) return `<section class="wcoll" id="${c.slug}">${head}<p class="small">Nothing here yet.</p></section>`;
+  const tiles = s.tokens.map((t) => {
+    const d = `data-day="${t.id}" data-src="${esc(t.image)}" data-prefix="${c.slug}" data-pixel="${c.pixel ? 1 : 0}"${t.bg ? ` data-bg="${esc(t.bg)}"` : ""}`;
+    return `<div class="tile"><a href="${esc(t.url)}"><img src="${esc(t.image)}" alt="${esc(t.label)}" loading="lazy"${c.pixel ? ' class="pixel"' : ""}></a><div class="cap"><a href="${esc(t.url)}">${esc(t.caption)}</a></div><div class="get"><a href="${esc(t.image)}" data-dl="svg" ${d}>SVG</a><a href="${esc(t.image)}" data-dl="png" ${d}>PNG</a><a href="${esc(t.image)}" data-dl="jpeg" ${d}>JPEG</a></div></div>`;
+  });
+  return `<section class="wcoll" id="${c.slug}">${head}<div class="strip">${tiles.join("")}</div></section>`;
+}
+
+function whoBlock(): string {
+  return `<div class="who"><button class="cta syne" id="connect" type="button">Connect wallet</button><form action="/go" method="get" style="display:flex;flex-direction:column;gap:10px"><input class="field" name="who" placeholder="0x… or name.eth" autocomplete="off" spellcheck="false" aria-label="Wallet address or ENS name" required><button class="cta ghost syne" type="submit">Show</button></form></div>
+<p class="msg" id="msg" aria-live="polite"></p>
+<p class="small" id="last" hidden>Last time here: <a href="/wallet">…</a>.</p>`;
+}
+
+/** /wallet (no address yet) and /wallet/<who>. Colors follow the home page. */
+export function walletPage(states: CollectionState[], wallet: Wallet | null, handle = ""): string {
+  const p = pageColors(states);
+  const total = wallet ? wallet.states.reduce((a, s) => a + s.tokens.length, 0) : 0;
+  const parts = wallet ? wallet.states.filter((s) => s.ok).map((s) => `${s.tokens.length} ${unit(s.c, s.tokens.length)}`).join(", ") : "";
+  const title = wallet ? esc(wallet.name ?? (wallet.address ? shortAddr(wallet.address) : handle)) : "Your wallet";
+  const sizes = `<div><p class="small" style="margin:0 0 8px">PNG and JPEG size</p><div class="sizes" role="group" aria-label="Image size">${SIZES.map((s) => `<button type="button" data-size="${s}" aria-pressed="${s === 2048}">${s}</button>`).join("")}</div></div>`;
+  const body = `<div class="page">
+<aside><div class="stick">
+<a class="mark syne" href="/">${SITE}</a>
+<h1 class="syne">${title}</h1>
+<p class="lead">${wallet ? `Every token this wallet holds across the collections here. Save any of them as SVG, PNG or JPEG.${wallet.address && wallet.name ? ` <span class="small">${shortAddr(wallet.address)}</span>` : ""}` : "Connect a wallet or type an address, and this page lists every token it holds across the collections here, each one ready to save as SVG, PNG or JPEG."}</p>
+<hr>
+${wallet ? `<div><div class="big syne">${num(total)}</div><p class="small">${plural(total, "token", "tokens")} in this wallet${parts ? `: ${parts}` : ""}</p></div>\n<hr>` : ""}
+${whoBlock()}
+${wallet && total ? `<hr>\n${sizes}` : ""}
+<hr>
+<nav class="small" style="display:flex;flex-direction:column;gap:6px">${states.map((s) => `<a href="${wallet ? `#${s.c.slug}` : `https://${s.c.host}/yours`}">${esc(s.c.name)}</a>`).join("")}<a href="/">All collections</a></nav>
+</div></aside>
+<main>
+${wallet ? wallet.states.map(walletSection).join("\n") : states.map((s) => `<section class="wcoll" id="${s.c.slug}"><div class="head"><h2 class="syne">${esc(s.c.name)}</h2><a class="small" href="https://${s.c.host}/yours">Your ${s.c.kind === "rolls" ? "faces" : "days"} on ${s.c.host}</a></div></section>`).join("\n")}
+<footer><span>This is not an investment and never will be. Everything is CC0.${wallet?.address ? ` <a href="/api/wallet/${wallet.address}.json">JSON</a>` : ""}</span><nav>${COLLECTIONS.map((c) => `<a href="https://${c.host}">${esc(c.name)}</a>`).join("")}<a href="/">Home</a></nav></footer>
+</main>
+</div>
+${connectScript("/wallet/")}
+${wallet && total ? downloadScript("onenft", false) : ""}`;
+  return layout(`${wallet ? title : "Your wallet"}, ${SITE}`, p, body, "https://knot.onenft.click/today.png");
 }

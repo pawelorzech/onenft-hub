@@ -7,12 +7,14 @@ The landing at the root of onenft.click, listing every daily collection: knot (`
 - One Bun server, no dependencies, no chain reads of its own. It reads each collection's `/api/today` and `/api/days` over HTTPS (`src/state.ts`), caches for a minute and keeps the last good answer on failure.
 - `src/collections.ts` is the table. **Adding a collection is one entry there**; the page, the JSON and the tests follow.
 - Every path not in `OWN` (`src/server.ts`) redirects 301 to `https://knot.onenft.click` with path and query kept. Never add a page here whose path the knot uses (`/how`, `/explore`, `/day/*`, `/api/*`, `/feed.xml`, `/calendar.ics`); it would shadow a redirect people rely on.
+- `/wallet` and `/wallet/<address or name.eth>` (plus `/api/wallet/<who>.json`) show one wallet across every collection. The hub reads each site's `/api/holder/<who>` (`src/state.ts`, `walletOf`), normalizes `days` (daily) and `faces` (rolls) into one token list (`tokensOf`), and downloads PNG/JPEG in the browser from the cross-origin SVG (`downloadScript`, copied from the knot; keep the two in step). Collections resolve ENS themselves, so the hub still has no chain code.
+- Order on every page = order of `COLLECTIONS`: Faces first (Paweł, 2026-09-05), then Knot, Blit, Chain Run.
 - Colors come from the knot's `palette.bg` and `palette.cord`. Fallback near-black on near-white only when the knot does not answer. No light/dark toggle, ever.
 - Same copy rules as the collections: English, plain words, active voice, no adverbs, no em dashes. Same anti-slop design rules.
 
 ## Commands
 
-- `bun test` (4 tests) · `PORT=3000 bun run src/server.ts`.
+- `bun test` (9 tests) · `PORT=3000 bun run src/server.ts`.
 - Deploy = `git push origin master`, then trigger the Coolify redeploy (see `CLAUDE.local.md`).
 
 ## Frontend Theme

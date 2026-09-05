@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
-import { homePage, pageColors, FALLBACK, mix } from "./site.ts";
-import { colorsOf, todayOf, tallyOf, newestOf, rollsOf, type CollectionState } from "./state.ts";
+import { homePage, walletPage, goTarget, pageColors, FALLBACK, mix } from "./site.ts";
+import { colorsOf, todayOf, tallyOf, newestOf, rollsOf, tokensOf, type CollectionState, type Wallet } from "./state.ts";
 import { COLLECTIONS } from "./collections.ts";
 import { handle, OWN } from "./server.ts";
 
@@ -61,4 +61,76 @@ test("old knot paths redirect to knot.onenft.click, own paths do not", async () 
   expect(OWN.has("/")).toBe(true);
   const h = await handle(new Request("https://onenft.click/health"));
   expect(await h.text()).toBe("ok, 4 collections");
+});
+
+const A = "0x84Cf6667FdE676a5950730720b67d62B9AB476Df";
+function wallet(): Wallet {
+  const by = (slug: string) => COLLECTIONS.find((c) => c.slug === slug)!;
+  return {
+    address: A,
+    name: "pawelorzech.eth",
+    fetchedAt: 1,
+    states: [
+      { c: by("faces"), ok: true, tokens: tokensOf(by("faces"), { faces: [{ id: 12, image: "https://faces.onenft.click/face/12.svg", url: "https://faces.onenft.click/face/12" }] }) },
+      { c: by("knot"), ok: true, tokens: tokensOf(by("knot"), { days: [{ day: 1, image: "https://knot.onenft.click/day/1.svg", url: "https://knot.onenft.click/day/1", traits: { palette: "ultramarine" }, palette: { bg: "#0e1430" } }, { day: 3, image: "https://knot.onenft.click/day/3.svg", url: "https://knot.onenft.click/day/3", traits: { palette: "pine" }, palette: { bg: "#0c1a1a" } }] }) },
+      { c: by("blit"), ok: true, tokens: [] },
+      { c: by("chainrun"), ok: false, tokens: [] },
+    ],
+  };
+}
+
+test("tokens normalize daily days and rolled faces the same way", () => {
+  const w = wallet();
+  expect(w.states[0].tokens[0]).toMatchObject({ id: 12, label: "Face #12", caption: "face 12", bg: null });
+  expect(w.states[1].tokens[1]).toMatchObject({ id: 3, label: "Day 3", caption: "day 3, pine", bg: "#0c1a1a" });
+});
+
+test("wallet page: Faces first, one section per collection, three chips per token, a failed site is marked", () => {
+  const h = walletPage(states(), wallet(), A);
+  expect(h.indexOf('id="faces"')).toBeLessThan(h.indexOf('id="knot"'));
+  expect(h).toContain("<h1 class=\"syne\">pawelorzech.eth</h1>");
+  expect(h).toContain(">3</div>");
+  expect(h).toContain("1 face, 2 knots, 0 blits");
+  expect((h.match(/data-dl="png"/g) ?? []).length).toBe(3);
+  expect(h).toContain('data-prefix="knot" data-pixel="0" data-bg="#0e1430"');
+  expect(h).toContain('data-prefix="faces" data-pixel="1"');
+  expect(h).toContain("Nothing here yet.");
+  expect(h).toContain("did not answer");
+  expect(h).toContain('href="https://chainrun.onenft.click/yours"');
+  expect(h).toContain('class="sizes"');
+  expect(h).toContain("onenft_size");
+  expect(h).toContain(`/api/wallet/${A}.json`);
+  expect(h).not.toContain("—");
+});
+
+test("wallet page without an address asks for one and links each site's Yours page", () => {
+  const h = walletPage(states(), null);
+  expect(h).toContain('id="connect"');
+  expect(h).toContain('action="/go"');
+  for (const c of COLLECTIONS) expect(h).toContain(`https://${c.host}/yours`);
+  expect(h).not.toContain("onenft_size");
+});
+
+test("home page links the wallet page and lists Faces first", () => {
+  const h = homePage(states());
+  expect(h).toContain('href="/wallet">Your wallet</a>');
+  expect(h.indexOf('id="faces"')).toBeLessThan(h.indexOf('id="knot"'));
+});
+
+test("/wallet routes: own paths, prefix match, /go validation, bad handles bounce", async () => {
+  expect(OWN.has("/wallet")).toBe(true);
+  const g = await handle(new Request("https://onenft.click/go?who=pawelorzech.eth"));
+  expect(g.status).toBe(302);
+  expect(g.headers.get("location")).toBe("/wallet/pawelorzech.eth");
+  const bad = await handle(new Request("https://onenft.click/go?who=junk"));
+  expect(bad.headers.get("location")).toBe("/wallet");
+  const bounce = await handle(new Request("https://onenft.click/wallet/junk"));
+  expect(bounce.status).toBe(302);
+  expect(bounce.headers.get("location")).toBe("/wallet");
+  const badJson = await handle(new Request("https://onenft.click/api/wallet/junk.json"));
+  expect(badJson.status).toBe(200);
+  expect((await badJson.json()).error).toContain("not an address");
+  expect(goTarget(" 0x84Cf6667FdE676a5950730720b67d62B9AB476Df ", "/wallet/", "/wallet")).toBe(`/wallet/${A}`);
+  const old = await handle(new Request("https://onenft.click/0x84Cf6667FdE676a5950730720b67d62B9AB476Df"));
+  expect(old.status).toBe(301);
 });

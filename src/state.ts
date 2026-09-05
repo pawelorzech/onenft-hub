@@ -118,3 +118,55 @@ export async function stateOf(c: Collection): Promise<CollectionState> {
 export async function allStates(): Promise<CollectionState[]> {
   return Promise.all(COLLECTIONS.map(stateOf));
 }
+
+// ---- one wallet across every collection
+
+/** One token as the wallet page shows it, whatever the collection calls it. */
+export type WalletToken = { id: number; label: string; image: string; url: string; caption: string; bg: string | null };
+export type WalletState = { c: Collection; ok: boolean; tokens: WalletToken[] };
+export type Wallet = { address: string | null; name: string | null; states: WalletState[]; fetchedAt: number };
+
+/** Normalize a collection's /api/holder answer. Daily collections list `days` with a `day`; rolls list `faces` with an `id`. */
+export function tokensOf(c: Collection, j: any): WalletToken[] {
+  const list: any[] = c.kind === "rolls" ? j?.faces ?? [] : j?.days ?? [];
+  return list.map((t) => {
+    const id = Number(c.kind === "rolls" ? t.id : t.day);
+    const palette = typeof t?.traits?.palette === "string" ? t.traits.palette : null;
+    return {
+      id,
+      label: c.kind === "rolls" ? `Face #${id}` : `Day ${id}`,
+      image: String(t.image ?? `https://${c.host}/${c.kind === "rolls" ? "face" : "day"}/${id}.svg`),
+      url: String(t.url ?? `https://${c.host}/${c.kind === "rolls" ? "face" : "day"}/${id}`),
+      caption: palette ? `${c.kind === "rolls" ? "face" : "day"} ${id}, ${palette}` : `${c.kind === "rolls" ? "face" : "day"} ${id}`,
+      bg: t?.palette?.bg ?? null,
+    };
+  });
+}
+
+const WALLET_MAX = 200;
+const wallets = new Map<string, Wallet>();
+
+/** Every collection's /api/holder for one address or ENS name, in parallel. A site that fails is marked, not dropped. */
+export async function walletOf(who: string): Promise<Wallet> {
+  const key = who.toLowerCase();
+  const hit = wallets.get(key);
+  if (hit && Date.now() - hit.fetchedAt < TTL_MS) return hit;
+  let address: string | null = null, name: string | null = null;
+  const states = await Promise.all(
+    COLLECTIONS.map(async (c): Promise<WalletState> => {
+      try {
+        const j = await getJson(`https://${c.host}/api/holder/${encodeURIComponent(who)}`);
+        if (!address && typeof j?.address === "string") address = j.address;
+        if (!name && typeof j?.name === "string") name = j.name;
+        return { c, ok: true, tokens: tokensOf(c, j) };
+      } catch (e) {
+        console.error(`${c.host} holder ${who}: ${(e as Error).message}`);
+        return { c, ok: false, tokens: [] };
+      }
+    }),
+  );
+  const w: Wallet = { address, name, states, fetchedAt: Date.now() };
+  if (wallets.size >= WALLET_MAX) wallets.delete(wallets.keys().next().value!);
+  wallets.set(key, w);
+  return w;
+}
