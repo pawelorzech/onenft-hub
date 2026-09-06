@@ -62,10 +62,9 @@ export const COLLECTIONS: Collection[] = [
     source: "Every coin holds 5, 10, 25 or 50 USDC in a vault that earns; burn it and the backing plus its yield comes back. Art and money never correlate: 50 Master Coins a series come from an urn nobody can steer, and a 5 USDC coin can be one of them. Burn after 30 days. It can lose you money.",
     pixel: true,
     repo: "https://github.com/pawelorzech/onenft-one",
-    contract: "0x4Bd8F79bE4862544cbA135b87a139Be0e3004a72",
-    announce: false,
+    contract: "0x7A7dea7489708cc9b50831C364aCf6e95aA13b41",
     // No OpenSea collection slug yet; the contract's first asset page lists the collection once it exists.
-    opensea: "https://opensea.io/assets/base/0x4Bd8F79bE4862544cbA135b87a139Be0e3004a72/1",
+    opensea: "https://opensea.io/assets/base/0x7A7dea7489708cc9b50831C364aCf6e95aA13b41/1",
   },
   {
     slug: "knot",
