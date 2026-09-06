@@ -258,7 +258,8 @@ function stateLine(s: CollectionState): string {
     if (!s.rolls) return "";
     if (!t) return `<p>Nobody has ${s.c.kind === "coins" ? "minted" : "rolled"} yet.</p>`;
     const owner = t.ownerName ?? (t.owner ? shortAddr(t.owner) : null);
-    const who = t.state === "author" ? (s.c.kind === "coins" ? "a founder coin" : "the treasury's daily roll") : owner ? `held by ${esc(owner)}` : s.c.preview ? "from the preview series" : "";
+    const who = t.state === "author" ? (s.c.kind === "coins" ? "a founder coin" : "the treasury's daily roll") : owner ? `held by ${esc(owner)}` : "";
+    if (s.c.preview) return `<p><span class="syne" style="font-weight:700">Preview ${tokenWord(s.c, t.day).toLowerCase()}</span>, a simulated coin; nothing is minted yet.</p>`;
     return `<p><span class="syne" style="font-weight:700">${tokenWord(s.c, t.day)}</span>, the newest${who ? `, ${who}` : ""}.</p>`;
   }
   if (!t) return "";
@@ -272,7 +273,7 @@ function tallyBlock(s: CollectionState): string {
     const r = s.rolls;
     if (!r) return "";
     const coins = s.c.kind === "coins";
-    return `<div class="tally syne"><div><b>${num(r.rolled)}</b><span>of ${num(r.max)} ${coins ? `minted${s.c.preview ? " in the preview" : ""}` : "rolled"}</span></div>${r.pending ? `<div><b>${num(r.pending)}</b><span>being revealed</span></div>` : ""}<div><b>${num(r.poolLeft)}</b><span>${coins ? "Master Coins left" : "one of ones left"}</span></div></div>`;
+    return `<div class="tally syne"><div><b>${num(r.rolled)}</b><span>of ${num(r.max)} ${coins ? "minted" : "rolled"}</span></div>${r.pending ? `<div><b>${num(r.pending)}</b><span>being revealed</span></div>` : ""}<div><b>${num(r.poolLeft)}</b><span>${coins ? "Master Coins left" : "one of ones left"}</span></div></div>`;
   }
   const y = s.tally;
   if (!y) return "";
