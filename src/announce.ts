@@ -11,13 +11,16 @@
  *
  * Posting needs an X app with write access and four keys in the env:
  * X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET (OAuth 1.0a user
- * context, signed here with node:crypto, no dependency). Without them the
- * announcer stays off. ANNOUNCE_DRY_RUN=1 logs the posts instead of sending.
+ * context, signed here with node:crypto, no dependency). The same post goes
+ * out as a cast on Farcaster when FC_FID and FC_SIGNER_KEY are set
+ * (`farcaster.ts`). Without either the announcer stays off. ANNOUNCE_DRY_RUN=1
+ * logs the posts instead of sending.
  */
 import { createHmac, randomBytes } from "node:crypto";
 import { COLLECTIONS, type Collection } from "./collections.ts";
 import { baseOf, count, address, ensName, stateWord, ownUrl } from "./state.ts";
 import { llmPost, llmStatus, type Brief } from "./llm.ts";
+import { fcFromEnv, castText, submitCast, type Fc } from "./farcaster.ts";
 
 export type Mint = {
   slug: string;
@@ -383,7 +386,8 @@ export async function post(auth: Auth, m: Mint): Promise<string> {
 
 // ---- the loop
 
-export type AnnouncerStatus = { llm: ReturnType<typeof llmStatus>; enabled: boolean; auth: "oauth1" | "oauth2" | null; dryRun: boolean; seeded: boolean; seen: number; posted: number; failed: number; lastPostAt: string | null; lastError: string | null };
+export type FcStatus = { fid: number | null; posted: number; failed: number; lastError: string | null };
+export type AnnouncerStatus = { llm: ReturnType<typeof llmStatus>; enabled: boolean; auth: "oauth1" | "oauth2" | null; fc: FcStatus; dryRun: boolean; seeded: boolean; seen: number; posted: number; failed: number; lastPostAt: string | null; lastError: string | null };
 
 /** Which of `now` are new, given what was seen. Pure, so the test can drive it. */
 export function fresh(now: Mint[], seen: Set<string>): Mint[] {
@@ -394,8 +398,25 @@ const seen = new Set<string>();
 /** UTC hour after which the daily note goes out; -1 turns it off. */
 /** UTC hours at which the promos go out, one collection each; empty turns them off. */
 let promoHours: number[] = [8, 14, 20];
-const status: Omit<AnnouncerStatus, "llm"> = { enabled: false, auth: null, dryRun: false, seeded: false, seen: 0, posted: 0, failed: 0, lastPostAt: null, lastError: null };
-export const announcerStatus = (): AnnouncerStatus => ({ ...status, seen: seen.size, llm: llmStatus() });
+const status: Omit<AnnouncerStatus, "llm"> = { enabled: false, auth: null, fc: { fid: null, posted: 0, failed: 0, lastError: null }, dryRun: false, seeded: false, seen: 0, posted: 0, failed: 0, lastPostAt: null, lastError: null };
+export const announcerStatus = (): AnnouncerStatus => ({ ...status, fc: { ...status.fc }, seen: seen.size, llm: llmStatus() });
+
+/**
+ * The cast for one post: the same words, the picture and the page as embeds.
+ * A failure is counted and logged, never retried: the post is already on X
+ * and a retry would cast it twice on the next success.
+ */
+async function cast(fc: Fc, m: Mint, text: string): Promise<void> {
+  try {
+    const hash = await submitCast(fc, castText(text, m.brief.url), [m.image, m.brief.url]);
+    status.fc.posted++;
+    console.log(`announce: ${m.key} cast as ${hash}`);
+  } catch (e) {
+    status.fc.failed++;
+    status.fc.lastError = String((e as Error)?.message ?? e);
+    console.warn(`announce: ${m.key} cast failed: ${status.fc.lastError}`);
+  }
+}
 
 async function loadSeen(file: string): Promise<void> {
   try {
@@ -409,7 +430,7 @@ async function saveSeen(file: string | undefined): Promise<void> {
 }
 
 /** One round: read, diff, post. Exported so a test can run it without the timer. */
-export async function round(auth: Auth | null, file?: string): Promise<Mint[]> {
+export async function round(auth: Auth | null, file?: string, fc: Fc | null = null): Promise<Mint[]> {
   const now = await currentMints();
   if (!status.seeded) {
     for (const m of now) seen.add(m.key);
@@ -424,10 +445,12 @@ export async function round(auth: Auth | null, file?: string): Promise<Mint[]> {
   const out: Mint[] = [];
   for (const m of todo) {
     try {
-      if (status.dryRun || !auth) console.log(`announce (dry run): ${m.text.replace(/\n/g, " ")} [${m.image}]`);
+      if (status.dryRun || (!auth && !fc)) console.log(`announce (dry run): ${m.text.replace(/\n/g, " ")} [${m.image}]`);
       else {
         const text = (await llmPost(m.brief)) ?? m.text;
-        console.log(`announce: ${m.key} posted as ${await post(auth, { ...m, text })}${text === m.text ? " (template)" : " (llm)"}`);
+        // X first: its failure throws and the post is retried next round. The cast follows and never throws.
+        if (auth) console.log(`announce: ${m.key} posted as ${await post(auth, { ...m, text })}${text === m.text ? " (template)" : " (llm)"}`);
+        if (fc) await cast(fc, m, text);
       }
       seen.add(m.key);
       status.posted++;
@@ -444,27 +467,29 @@ export async function round(auth: Auth | null, file?: string): Promise<Mint[]> {
   return out;
 }
 
-/** Starts the timer when an auth is present or dry run is on. Returns whether it started. */
+/** Starts the timer when an X auth or a Farcaster key is present, or dry run is on. Returns whether it started. */
 export function startAnnouncer(env: Record<string, string | undefined> = process.env): boolean {
   const auth = authFromEnv(env);
+  const fc = fcFromEnv(env);
   status.dryRun = env.ANNOUNCE_DRY_RUN === "1";
   promoHours = (env.ANNOUNCE_PROMO_HOURS_UTC ?? "8,14,20").split(",").map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n >= 0 && n < 24).sort((a, b) => a - b);
-  if (!auth && !status.dryRun) {
-    console.log("announce: off, no X keys in the env");
+  if (!auth && !fc && !status.dryRun) {
+    console.log("announce: off, no X keys and no Farcaster key in the env");
     return false;
   }
   status.enabled = true;
   status.auth = auth?.kind ?? null;
+  status.fc.fid = fc?.fid ?? null;
   const every = Math.max(15_000, Number(env.ANNOUNCE_EVERY_MS ?? 60_000));
   const file = env.ANNOUNCE_STATE_FILE;
   const tick = async () => {
     if (file && !status.seeded && seen.size === 0) await loadSeen(file);
     // A saved seen set means the boot already happened once; only post from then on.
     if (file && seen.size > 0) status.seeded = true;
-    await round(auth, file).catch((e) => console.warn(`announce: round failed: ${String((e as Error)?.message ?? e)}`));
+    await round(auth, file, fc).catch((e) => console.warn(`announce: round failed: ${String((e as Error)?.message ?? e)}`));
   };
   void tick();
   setInterval(() => void tick(), every);
-  console.log(`announce: on${status.dryRun ? " (dry run)" : ""} with ${auth?.kind ?? "no auth"}, every ${every / 1000} s`);
+  console.log(`announce: on${status.dryRun ? " (dry run)" : ""} with ${auth?.kind ?? "no X auth"}${fc ? `, farcaster fid ${fc.fid}` : ""}, every ${every / 1000} s`);
   return true;
 }

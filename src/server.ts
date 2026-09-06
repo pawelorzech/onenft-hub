@@ -47,7 +47,7 @@ async function route(url: URL): Promise<Response> {
   const wallet = path.match(/^\/(api\/)?wallet\/([^/]+?)(\.json)?$/);
   if (!OWN.has(path) && !wallet) return redirect(`${KNOT}${path}${url.search}`);
   // Liveness never waits on an upstream; readiness reports each one.
-  if (path === "/health") { const a = announcerStatus(); return new Response(`ok, ${COLLECTIONS.length} collections, up ${Math.floor((Date.now() - BOOT_AT) / 1000)} s, announcer ${a.enabled ? `on${a.dryRun ? " (dry run)" : ""} (${a.auth ?? "no auth"}), ${a.seen} seen, ${a.posted} posted, ${a.failed} failed${a.lastError ? `, last error: ${a.lastError}` : ""}, llm ${a.llm.model ? `${a.llm.model}: ${a.llm.used} used, ${a.llm.rejected} rejected, ${a.llm.failed} failed` : "off"}` : "off"}`); }
+  if (path === "/health") { const a = announcerStatus(); return new Response(`ok, ${COLLECTIONS.length} collections, up ${Math.floor((Date.now() - BOOT_AT) / 1000)} s, announcer ${a.enabled ? `on${a.dryRun ? " (dry run)" : ""} (${a.auth ?? "no auth"}), ${a.seen} seen, ${a.posted} posted, ${a.failed} failed${a.lastError ? `, last error: ${a.lastError}` : ""}, farcaster ${a.fc.fid ? `fid ${a.fc.fid}: ${a.fc.posted} cast, ${a.fc.failed} failed${a.fc.lastError ? `, last error: ${a.fc.lastError}` : ""}` : "off"}, llm ${a.llm.model ? `${a.llm.model}: ${a.llm.used} used, ${a.llm.rejected} rejected, ${a.llm.failed} failed` : "off"}` : "off"}`); }
   if (path === "/ready") {
     const states = await allStates();
     const ok = states.some((s) => s.status.known);

@@ -11,5 +11,8 @@
   "devDependencies": {
     "@types/bun": "^1.3.13",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@farcaster/core": "0.20.0"
   }
 }

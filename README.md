@@ -28,6 +28,6 @@ bun test
 PORT=3000 bun run src/server.ts
 ```
 
-No dependencies. `STATE_TTL_MS` changes the cache time; `UMAMI_URL` and `UMAMI_WEBSITE_ID` turn on analytics.
+One dependency, `@farcaster/core`, for signing casts. `STATE_TTL_MS` changes the cache time; `UMAMI_URL` and `UMAMI_WEBSITE_ID` turn on analytics. The announcer posts every new token on X (`X_*` keys) and on Farcaster (`FC_FID`, `FC_SIGNER_KEY`; `scripts/farcaster-signer.ts` makes the key).
 
 Everything is CC0.
