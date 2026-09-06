@@ -11,7 +11,7 @@
 import { xLength, X_LIMIT } from "./announce.ts";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-export const DEFAULT_MODEL = "anthropic/claude-opus-5";
+export const DEFAULT_MODEL = "google/gemini-3.8-flash";
 
 export type Brief = {
   /** What to say, one fact per line. */
