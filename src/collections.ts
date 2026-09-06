@@ -7,6 +7,7 @@
  * GET /api/holder/<0x… or name.eth> lists that wallet's tokens (`days` with a
  * `day` for daily ones, `faces` with an `id` for rolls), resolves the ENS name
  * itself, and serves each image at the `image` URL with `access-control-allow-origin: *`.
+ * It may add `facts`: a list of `{ figure, label }` the wallet page shows as tiles above the tokens.
  * Daily sites also answer /api/summary (today, tally, palette, freshness); rolls answer /api/state.
  */
 export type Collection = {
