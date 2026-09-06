@@ -19,12 +19,46 @@ function fake(handler: (path: string) => Response | Promise<Response>) {
 }
 const json = (o: unknown) => new Response(JSON.stringify(o), { headers: { "content-type": "application/json" } });
 
+test("wallet retains its last good tokens through repeated failures and invalid JSON shapes", async () => {
+  let mode = "good";
+  const upstream = fake(() => mode === "down" ? new Response("down", { status: 503 }) : json(mode === "junk" ? {} : {
+    address: "0x2222222222222222222222222222222222222222", days: [{ day: 1 }], faces: [{ id: 1 }], coins: [{ id: 1 }],
+  }));
+  const base = await boot({ STATE_TTL_MS: "0", UPSTREAM_OVERRIDE: JSON.stringify(Object.fromEntries(["knot", "blit", "chainrun", "faces", "one"].map((s) => [s, upstream.url]))) });
+  const read = async () => (await fetch(`${base}/api/wallet/0x2222222222222222222222222222222222222222.json`)).json() as Promise<any>;
+  const first = await read();
+  expect(first.checked).toBe(5);
+  for (const next of ["down", "down", "junk"]) {
+    mode = next;
+    const result = await read();
+    expect(result.checked).toBe(0);
+    for (let i = 0; i < 5; i++) {
+      expect(result.collections[i].tokens).toEqual(first.collections[i].tokens);
+      expect(result.collections[i].fetchedAt).toBe(first.collections[i].fetchedAt);
+    }
+  }
+  mode = "good";
+  expect((await read()).checked).toBe(5);
+});
+
+test("concurrent wallet reads share one upstream request per collection", async () => {
+  const upstream = fake(async () => {
+    await Bun.sleep(50);
+    return json({ address: "0x2222222222222222222222222222222222222222", days: [], faces: [], coins: [] });
+  });
+  const base = await boot({ UPSTREAM_OVERRIDE: JSON.stringify(Object.fromEntries(["knot", "blit", "chainrun", "faces", "one"].map((s) => [s, upstream.url]))) });
+  const responses = await Promise.all(Array.from({ length: 20 }, () => fetch(`${base}/api/wallet/0x2222222222222222222222222222222222222222.json`)));
+  expect(responses.every((r) => r.ok)).toBe(true);
+  expect(upstream.hits()).toBe(5);
+});
+
 async function boot(env: Record<string, string>): Promise<string> {
-  const port = String(36000 + Math.floor(Math.random() * 1000));
-  const proc = Bun.spawn(["bun", "run", "src/server.ts"], { env: { ...process.env, PORT: port, STATE_DEADLINE_MS: "500", UPSTREAM_TIMEOUT_MS: "60000", STATE_TTL_MS: "20000", WALLET_DEADLINE_MS: "500", ...env }, stdout: "pipe", stderr: "pipe" });
+  const port = "0";
+  let actualPort = 0;
+  const proc = Bun.spawn(["bun", "run", "src/server.ts"], { env: { ...process.env, PORT: port, STATE_DEADLINE_MS: "500", UPSTREAM_TIMEOUT_MS: "60000", STATE_TTL_MS: "20000", WALLET_DEADLINE_MS: "500", ...env }, stdout: "pipe", stderr: "pipe", ipc(message: unknown) { if (message && typeof message === "object" && "port" in message) actualPort = Number(message.port); } });
   procs.push(proc);
-  const base = `http://127.0.0.1:${port}`;
   for (let i = 0; i < 100; i++) {
+    const base = `http://127.0.0.1:${actualPort}`;
     try { if ((await fetch(`${base}/health`)).ok) return base; } catch {}
     await new Promise((r) => setTimeout(r, 50));
   }
@@ -63,12 +97,12 @@ test("one good, one hung, one junk, one down: the page renders within the deadli
   expect(JSON.stringify(rj)).not.toContain("127.0.0.1");
 
   const wallet = await (await fetch(`${base}/wallet/0x84Cf6667FdE676a5950730720b67d62B9AB476Df`)).text();
-  expect(wallet).toContain("Found 1 token in 2 of 5 collections. Faces, ONE, Blit could not be checked.");
+  expect(wallet).toContain("Found 1 token in 1 of 5 collections. Faces, ONE, Blit, Chain Run could not be checked.");
   expect(wallet).toContain("could not be checked");
   const wj = await fetch(`${base}/api/wallet/0x84Cf6667FdE676a5950730720b67d62B9AB476Df.json`);
   expect(wj.status).toBe(200);
   const w = await wj.json();
-  expect(w.checked).toBe(2);
+  expect(w.checked).toBe(1);
   expect(w.of).toBe(5);
   expect(w.collections.find((c: any) => c.slug === "blit").ok).toBe(false);
 }, 30000);

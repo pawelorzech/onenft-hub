@@ -1,9 +1,24 @@
-import { test, expect } from "bun:test";
-import { dailyMint, rollMints, fresh, who, oauthHeader, keysFromEnv } from "./announce.ts";
+import { test, expect, spyOn } from "bun:test";
+import { promoText, xLength, dailyMint, rollMints, currentMints, fresh, who, oauthHeader, keysFromEnv } from "./announce.ts";
 import { COLLECTIONS } from "./collections.ts";
 
 const knot = COLLECTIONS.find((c) => c.slug === "knot")!;
 const faces = COLLECTIONS.find((c) => c.slug === "faces")!;
+
+test("ONE announcements use coin routes and copy with the risk warning", async () => {
+  const fakeFetch = Object.assign(async (url: Parameters<typeof fetch>[0]) => Response.json(String(url).includes("one.onenft.click") ? { recent: [{ id: 42, png: "https://one.onenft.click/coin/42-1024.png?c=test" }] } : {}), { preconnect: fetch.preconnect });
+  const fetchMock = spyOn(globalThis, "fetch").mockImplementation(fakeFetch);
+  try {
+    const mints = await currentMints();
+    expect(mints).toHaveLength(1);
+    expect(mints[0].text).toContain("Coin #42 was minted");
+    expect(mints[0].text).toContain("ONE can lose you money");
+    expect(mints[0].text).not.toContain("Face");
+    expect(mints[0].text).not.toContain("Pin");
+    expect(mints[0].brief.url).toBe("https://one.onenft.click/coin/42");
+    expect(mints[0].image).toBe("https://one.onenft.click/coin/42-1024.png?c=test");
+  } finally { fetchMock.mockRestore(); }
+});
 
 test("a claimed day becomes one message with the 1024 png; a free day is nothing", () => {
   const m = dailyMint(knot, { day: 12, state: "taken", owner: "0x84Cf6667FdE676a5950730720b67d62B9AB476Df", ownerName: "pawelorzech.eth", traits: { palette: "tar" } })!;
@@ -106,4 +121,12 @@ test("a model answer goes out only when it keeps the link, fits, has a tag, and 
   expect(accept("Day 3 is gone 🎉\nhttps://knot.onenft.click/day/3\n#onchain", b)).toBe(false);
   expect(accept("Day 3 is gone.\nhttps://knot.onenft.click/day/3", b)).toBe(false);
   expect(accept("x".repeat(270) + "\nhttps://knot.onenft.click/day/3\n#onchain", b)).toBe(false);
+});
+
+test("ONE promos retain the warning and never describe a free mint", () => {
+  const c = COLLECTIONS.find(c => c.slug === "one")!;
+  const result = promoText(c, { recent: [{ id: 123 }] })!;
+  expect(result).toContain("ONE can lose you money.");
+  expect(result).not.toMatch(/\bfree\b/i);
+  expect(xLength(result)).toBeLessThanOrEqual(280);
 });

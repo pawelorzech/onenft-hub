@@ -1,0 +1,282 @@
+diff --git a/dist/index.js b/dist/index.js
+index 29196004cca0f4214d50ff26ed35cc0140acaac6..6cae9c9ef1596c764486374a0b69e70d71b7c8eb 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -22800,24 +22800,24 @@ function toBigInt(value) {
+ 
+ // src/factories.ts
+ var FidFactory = Factory.define(() => {
+-  return import_faker.faker.datatype.number({ min: 1 });
++  return import_faker.faker.number.int({ min: 1 });
+ });
+ var BytesFactory = Factory.define(({ transientParams }) => {
+   var _a;
+-  const length = (_a = transientParams.length) != null ? _a : import_faker.faker.datatype.number({ max: 64, min: 1 });
++  const length = (_a = transientParams.length) != null ? _a : import_faker.faker.number.int({ max: 64, min: 1 });
+   return (0, import_utils4.randomBytes)(length);
+ });
+ var MessageHashFactory = Factory.define(() => {
+   return BytesFactory.build({}, { transient: { length: 20 } });
+ });
+ var FnameFactory = Factory.define(() => {
+-  const length = import_faker.faker.datatype.number({ min: 1, max: 16 });
++  const length = import_faker.faker.number.int({ min: 1, max: 16 });
+   const bytes = new Uint8Array(length);
+   bytes.set(
+     [
+       import_faker.faker.helpers.arrayElement([
+-        import_faker.faker.datatype.number({ min: 48, max: 57 }),
+-        import_faker.faker.datatype.number({ min: 97, max: 122 })
++        import_faker.faker.number.int({ min: 48, max: 57 }),
++        import_faker.faker.number.int({ min: 97, max: 122 })
+       ])
+     ],
+     0
+@@ -22827,8 +22827,8 @@ var FnameFactory = Factory.define(() => {
+       [
+         import_faker.faker.helpers.arrayElement([
+           45,
+-          import_faker.faker.datatype.number({ min: 48, max: 57 }),
+-          import_faker.faker.datatype.number({ min: 97, max: 122 })
++          import_faker.faker.number.int({ min: 48, max: 57 }),
++          import_faker.faker.number.int({ min: 97, max: 122 })
+         ])
+       ],
+       i
+@@ -22837,7 +22837,7 @@ var FnameFactory = Factory.define(() => {
+   return bytes;
+ });
+ var EnsNameFactory = Factory.define(() => {
+-  const ensName = import_faker.faker.random.alphaNumeric(import_faker.faker.datatype.number({ min: 3, max: 16 }));
++  const ensName = import_faker.faker.string.alphanumeric(import_faker.faker.number.int({ min: 3, max: 16 }));
+   return utf8StringToBytes(ensName.concat(".eth"))._unsafeUnwrap();
+ });
+ var BlockHashFactory = Factory.define(() => {
+@@ -23301,7 +23301,7 @@ var VerificationRemoveMessageFactory = MessageFactory.params({
+ var UserDataBodyFactory = Factory.define(() => {
+   return UserDataBody.create({
+     type: UserDataTypeFactory.build(),
+-    value: import_faker.faker.random.alphaNumeric(16)
++    value: import_faker.faker.string.alphanumeric(16)
+     // 16 chars to stay within range for all UserDataAdd types
+   });
+ });
+@@ -23349,7 +23349,7 @@ var UsernameProofMessageFactory = Factory.define(
+ var FrameActionBodyFactory = Factory.define(() => {
+   return FrameActionBody.create({
+     url: Buffer.from(import_faker.faker.internet.url()),
+-    buttonIndex: import_faker.faker.datatype.number({ min: 1, max: 4 }),
++    buttonIndex: import_faker.faker.number.int({ min: 1, max: 4 }),
+     castId: CastIdFactory.build()
+   });
+ });
+@@ -23373,7 +23373,7 @@ var FrameActionMessageFactory = Factory.define(
+ var LendStorageBodyFactory = Factory.define(() => {
+   return LendStorageBody.create({
+     toFid: FidFactory.build(),
+-    numUnits: import_faker.faker.datatype.number({ min: 1, max: 10 }),
++    numUnits: import_faker.faker.number.int({ min: 1, max: 10 }),
+     unitType: 2 /* UNIT_TYPE_2025 */
+   });
+ });
+@@ -23399,12 +23399,12 @@ var KeyAddBodyFactory = Factory.define(() => {
+     key: Ed25519PublicKeyFactory.build(),
+     keyType: 1,
+     custodySignature: Eip712SignatureFactory.build(),
+-    deadline: import_faker.faker.datatype.number({ min: 1, max: 2 ** 31 - 1 }),
+-    nonce: import_faker.faker.datatype.number({ min: 1, max: 2 ** 31 - 1 }),
++    deadline: import_faker.faker.number.int({ min: 1, max: 2 ** 31 - 1 }),
++    nonce: import_faker.faker.number.int({ min: 1, max: 2 ** 31 - 1 }),
+     metadata: BytesFactory.build({}, { transient: { length: 64 } }),
+     metadataType: 1,
+     scopes: [1 /* CAST_ADD */],
+-    ttl: import_faker.faker.datatype.number({ min: 1, max: 60 * 60 * 24 * 365 })
++    ttl: import_faker.faker.number.int({ min: 1, max: 60 * 60 * 24 * 365 })
+   });
+ });
+ var KeyAddDataFactory = Factory.define(() => {
+@@ -23429,8 +23429,8 @@ var KeyRemoveBodyFactory = Factory.define(() => {
+     key: Ed25519PublicKeyFactory.build(),
+     signature: Eip712SignatureFactory.build(),
+     signatureType: 1,
+-    deadline: import_faker.faker.datatype.number({ min: 1, max: 2 ** 31 - 1 }),
+-    nonce: import_faker.faker.datatype.number({ min: 1, max: 2 ** 31 - 1 })
++    deadline: import_faker.faker.number.int({ min: 1, max: 2 ** 31 - 1 }),
++    nonce: import_faker.faker.number.int({ min: 1, max: 2 ** 31 - 1 })
+   });
+ });
+ var KeyRemoveDataFactory = Factory.define(() => {
+@@ -23455,11 +23455,11 @@ var OnChainEventFactory = Factory.define(() => {
+     type: 1 /* EVENT_TYPE_SIGNER */,
+     chainId: 1,
+     fid: FidFactory.build(),
+-    blockNumber: import_faker.faker.datatype.number({ min: 1, max: 1e5 }),
++    blockNumber: import_faker.faker.number.int({ min: 1, max: 1e5 }),
+     blockHash: BlockHashFactory.build(),
+-    blockTimestamp: Math.floor(import_faker.faker.datatype.datetime({ min: FARCASTER_EPOCH, max: Date.now() }).getTime() / 1e3),
++    blockTimestamp: Math.floor(import_faker.faker.date.between({ from: FARCASTER_EPOCH, to: Date.now() }).getTime() / 1e3),
+     transactionHash: TransactionHashFactory.build(),
+-    logIndex: import_faker.faker.datatype.number({ min: 0, max: 1e3 })
++    logIndex: import_faker.faker.number.int({ min: 0, max: 1e3 })
+   });
+ });
+ var UserNameProofFactory = Factory.define(() => {
+@@ -23513,7 +23513,7 @@ var SignerMigratedOnChainEventFactory = Factory.define(() => {
+ var StorageRentEventBodyFactory = Factory.define(() => {
+   return StorageRentEventBody.create({
+     payer: EthAddressFactory.build(),
+-    units: import_faker.faker.datatype.number({ min: 1, max: 10 }),
++    units: import_faker.faker.number.int({ min: 1, max: 10 }),
+     expiry: getFarcasterTime()._unsafeUnwrap() + 60 * 60 * 24 * 365
+     // a year
+   });
+@@ -23524,7 +23524,7 @@ var StorageRentOnChainEventFactory = Factory.define(
+     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+     const yesterday = /* @__PURE__ */ new Date();
+     yesterday.setDate(yesterday.getDate() - 1);
+-    const randomDate = import_faker.faker.date.between(oneYearAgo, yesterday);
++    const randomDate = import_faker.faker.date.between({ from: oneYearAgo, to: yesterday });
+     const randomDateInSeconds = Math.floor(randomDate.getTime() / 1e3);
+     return OnChainEventFactory.build({
+       type: 4 /* EVENT_TYPE_STORAGE_RENT */,
+diff --git a/dist/index.mjs b/dist/index.mjs
+index f1212876b687c4c115abd5012f4fde937df108de..89619a360dce647ef4c8dc187241a38d63582282 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -22472,24 +22472,24 @@ function toBigInt(value) {
+ 
+ // src/factories.ts
+ var FidFactory = Factory.define(() => {
+-  return faker.datatype.number({ min: 1 });
++  return faker.number.int({ min: 1 });
+ });
+ var BytesFactory = Factory.define(({ transientParams }) => {
+   var _a;
+-  const length = (_a = transientParams.length) != null ? _a : faker.datatype.number({ max: 64, min: 1 });
++  const length = (_a = transientParams.length) != null ? _a : faker.number.int({ max: 64, min: 1 });
+   return randomBytes(length);
+ });
+ var MessageHashFactory = Factory.define(() => {
+   return BytesFactory.build({}, { transient: { length: 20 } });
+ });
+ var FnameFactory = Factory.define(() => {
+-  const length = faker.datatype.number({ min: 1, max: 16 });
++  const length = faker.number.int({ min: 1, max: 16 });
+   const bytes = new Uint8Array(length);
+   bytes.set(
+     [
+       faker.helpers.arrayElement([
+-        faker.datatype.number({ min: 48, max: 57 }),
+-        faker.datatype.number({ min: 97, max: 122 })
++        faker.number.int({ min: 48, max: 57 }),
++        faker.number.int({ min: 97, max: 122 })
+       ])
+     ],
+     0
+@@ -22499,8 +22499,8 @@ var FnameFactory = Factory.define(() => {
+       [
+         faker.helpers.arrayElement([
+           45,
+-          faker.datatype.number({ min: 48, max: 57 }),
+-          faker.datatype.number({ min: 97, max: 122 })
++          faker.number.int({ min: 48, max: 57 }),
++          faker.number.int({ min: 97, max: 122 })
+         ])
+       ],
+       i
+@@ -22509,7 +22509,7 @@ var FnameFactory = Factory.define(() => {
+   return bytes;
+ });
+ var EnsNameFactory = Factory.define(() => {
+-  const ensName = faker.random.alphaNumeric(faker.datatype.number({ min: 3, max: 16 }));
++  const ensName = faker.string.alphanumeric(faker.number.int({ min: 3, max: 16 }));
+   return utf8StringToBytes(ensName.concat(".eth"))._unsafeUnwrap();
+ });
+ var BlockHashFactory = Factory.define(() => {
+@@ -22973,7 +22973,7 @@ var VerificationRemoveMessageFactory = MessageFactory.params({
+ var UserDataBodyFactory = Factory.define(() => {
+   return UserDataBody.create({
+     type: UserDataTypeFactory.build(),
+-    value: faker.random.alphaNumeric(16)
++    value: faker.string.alphanumeric(16)
+     // 16 chars to stay within range for all UserDataAdd types
+   });
+ });
+@@ -23021,7 +23021,7 @@ var UsernameProofMessageFactory = Factory.define(
+ var FrameActionBodyFactory = Factory.define(() => {
+   return FrameActionBody.create({
+     url: Buffer.from(faker.internet.url()),
+-    buttonIndex: faker.datatype.number({ min: 1, max: 4 }),
++    buttonIndex: faker.number.int({ min: 1, max: 4 }),
+     castId: CastIdFactory.build()
+   });
+ });
+@@ -23045,7 +23045,7 @@ var FrameActionMessageFactory = Factory.define(
+ var LendStorageBodyFactory = Factory.define(() => {
+   return LendStorageBody.create({
+     toFid: FidFactory.build(),
+-    numUnits: faker.datatype.number({ min: 1, max: 10 }),
++    numUnits: faker.number.int({ min: 1, max: 10 }),
+     unitType: 2 /* UNIT_TYPE_2025 */
+   });
+ });
+@@ -23071,12 +23071,12 @@ var KeyAddBodyFactory = Factory.define(() => {
+     key: Ed25519PublicKeyFactory.build(),
+     keyType: 1,
+     custodySignature: Eip712SignatureFactory.build(),
+-    deadline: faker.datatype.number({ min: 1, max: 2 ** 31 - 1 }),
+-    nonce: faker.datatype.number({ min: 1, max: 2 ** 31 - 1 }),
++    deadline: faker.number.int({ min: 1, max: 2 ** 31 - 1 }),
++    nonce: faker.number.int({ min: 1, max: 2 ** 31 - 1 }),
+     metadata: BytesFactory.build({}, { transient: { length: 64 } }),
+     metadataType: 1,
+     scopes: [1 /* CAST_ADD */],
+-    ttl: faker.datatype.number({ min: 1, max: 60 * 60 * 24 * 365 })
++    ttl: faker.number.int({ min: 1, max: 60 * 60 * 24 * 365 })
+   });
+ });
+ var KeyAddDataFactory = Factory.define(() => {
+@@ -23101,8 +23101,8 @@ var KeyRemoveBodyFactory = Factory.define(() => {
+     key: Ed25519PublicKeyFactory.build(),
+     signature: Eip712SignatureFactory.build(),
+     signatureType: 1,
+-    deadline: faker.datatype.number({ min: 1, max: 2 ** 31 - 1 }),
+-    nonce: faker.datatype.number({ min: 1, max: 2 ** 31 - 1 })
++    deadline: faker.number.int({ min: 1, max: 2 ** 31 - 1 }),
++    nonce: faker.number.int({ min: 1, max: 2 ** 31 - 1 })
+   });
+ });
+ var KeyRemoveDataFactory = Factory.define(() => {
+@@ -23127,11 +23127,11 @@ var OnChainEventFactory = Factory.define(() => {
+     type: 1 /* EVENT_TYPE_SIGNER */,
+     chainId: 1,
+     fid: FidFactory.build(),
+-    blockNumber: faker.datatype.number({ min: 1, max: 1e5 }),
++    blockNumber: faker.number.int({ min: 1, max: 1e5 }),
+     blockHash: BlockHashFactory.build(),
+-    blockTimestamp: Math.floor(faker.datatype.datetime({ min: FARCASTER_EPOCH, max: Date.now() }).getTime() / 1e3),
++    blockTimestamp: Math.floor(faker.date.between({ from: FARCASTER_EPOCH, to: Date.now() }).getTime() / 1e3),
+     transactionHash: TransactionHashFactory.build(),
+-    logIndex: faker.datatype.number({ min: 0, max: 1e3 })
++    logIndex: faker.number.int({ min: 0, max: 1e3 })
+   });
+ });
+ var UserNameProofFactory = Factory.define(() => {
+@@ -23185,7 +23185,7 @@ var SignerMigratedOnChainEventFactory = Factory.define(() => {
+ var StorageRentEventBodyFactory = Factory.define(() => {
+   return StorageRentEventBody.create({
+     payer: EthAddressFactory.build(),
+-    units: faker.datatype.number({ min: 1, max: 10 }),
++    units: faker.number.int({ min: 1, max: 10 }),
+     expiry: getFarcasterTime()._unsafeUnwrap() + 60 * 60 * 24 * 365
+     // a year
+   });
+@@ -23196,7 +23196,7 @@ var StorageRentOnChainEventFactory = Factory.define(
+     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+     const yesterday = /* @__PURE__ */ new Date();
+     yesterday.setDate(yesterday.getDate() - 1);
+-    const randomDate = faker.date.between(oneYearAgo, yesterday);
++    const randomDate = faker.date.between({ from: oneYearAgo, to: yesterday });
+     const randomDateInSeconds = Math.floor(randomDate.getTime() / 1e3);
+     return OnChainEventFactory.build({
+       type: 4 /* EVENT_TYPE_STORAGE_RENT */,

@@ -1,13 +1,12 @@
 /**
  * Mint announcer: one post on X for every new token in every collection.
  *
- * Every ANNOUNCE_EVERY_MS the announcer reads each collection's own API
- * (today for daily ones, state for rolls), finds tokens it has not seen, and
- * posts one message with the token's PNG. On boot it marks what already
- * exists as seen without posting, so a redeploy never repeats old news; a
- * mint that lands while the hub is down is not announced. The seen set is
- * also written to ANNOUNCE_STATE_FILE when that is set, so a restart with a
- * volume picks up where it left off.
+ * Every ANNOUNCE_EVERY_MS it pages /api/mints from a durable contract-scoped
+ * cursor. First boot seeds the current head; later restarts recover backlog.
+ * Text, signed Farcaster bytes and per-channel delivery state are persisted
+ * before sending. Ambiguous X requests require operator reconciliation.
+ * ANNOUNCE_STATE_FILE on a durable volume is required for live delivery.
+ * Run exactly one worker; see docs/ANNOUNCER_OPERATIONS.md.
  *
  * Posting needs an X app with write access and four keys in the env:
  * X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET (OAuth 1.0a user
@@ -20,7 +19,8 @@ import { createHmac, randomBytes } from "node:crypto";
 import { COLLECTIONS, type Collection } from "./collections.ts";
 import { baseOf, count, address, ensName, stateWord, ownUrl } from "./state.ts";
 import { llmPost, llmStatus, type Brief } from "./llm.ts";
-import { fcFromEnv, castText, submitCast, type Fc } from "./farcaster.ts";
+import { fcFromEnv, castText, buildCast, submitCastBytes, type Fc } from "./farcaster.ts";
+import { DeliveryQueue, DefiniteSendError, atomicJson, type Channel } from "./delivery.ts";
 
 export type Mint = {
   slug: string;
@@ -133,6 +133,25 @@ export function rollMints(c: Collection, j: unknown): Mint[] {
   return out.sort((a, b) => a.id - b.id);
 }
 
+/** ONE has coins, backing and VRF; Faces copy and routes do not apply. */
+export function coinMints(c: Collection, j: unknown): Mint[] {
+  if (!isObj(j) || !Array.isArray(j.recent)) return [];
+  const out: Mint[] = [];
+  for (const coin of j.recent) {
+    if (!isObj(coin)) continue;
+    const id = count(coin.id);
+    if (id === null) continue;
+    const url = `https://${c.host}/coin/${id}`;
+    const tags = ["#onchain", "#Base", "#NFT"];
+    const first = `Coin #${id} was minted${coin.sealed === true ? " and awaits reveal" : ""}. ONE can lose you money.`;
+    const text = fit([first, c.line], url, tags);
+    out.push({ slug: c.slug, key: `${c.slug}:${id}`, id, text,
+      image: ownUrl(coin.png, c.host) ?? `https://${c.host}/coin/${id}-1024.png`,
+      brief: { facts: [first, c.line, c.source].join("\n"), angle: "a coin was minted; keep the warning that ONE can lose money", url, tags, reference: text, requiredText: "ONE can lose you money." } });
+  }
+  return out.sort((a, b) => a.id - b.id);
+}
+
 /** A number with thousands separators, English style. */
 const num = (n: number) => n.toLocaleString("en-US");
 
@@ -153,6 +172,12 @@ export function promoBrief(c: Collection, j: unknown, slot = 0, now = Date.now()
   if (!isObj(j)) return null;
   const tags = TAGS[c.slug] ?? [];
   const angle = ANGLES[slot] ?? ANGLES[0]!;
+  if (c.kind === "coins") {
+    const url = `https://${c.host}`;
+    const warning = "ONE can lose you money.";
+    const text = fit([warning, c.line], url, ["#onchain", "#Base", "#NFT"]);
+    return { text, brief: { facts: [warning, c.line, c.source].join("\n"), angle, url, tags: ["#onchain", "#Base", "#NFT"], reference: text, requiredText: warning } };
+  }
   if (c.kind === "rolls") {
     const rolled = count(j.totalSupply), max = count(j.maxSupply) ?? 10000, pool = count(j.poolLeft);
     if (rolled === null) return null;
@@ -206,7 +231,8 @@ export async function currentMints(): Promise<Mint[]> {
   const all = await Promise.all(ANNOUNCED.map(async (c) => {
     try {
       const base = baseOf(c);
-      if (c.kind !== "daily") return rollMints(c, await getJson(`${base}/api/state`));
+      if (c.kind === "coins") return coinMints(c, await getJson(`${base}/api/state`));
+      if (c.kind === "rolls") return rollMints(c, await getJson(`${base}/api/state`));
       const m = dailyMint(c, await getJson(`${base}/api/today`));
       return m ? [m] : [];
     } catch (e) {
@@ -328,7 +354,7 @@ export function oauth2Auth(clientId: string, clientSecret: string, seed: { acces
     if (!res.ok || !j?.access_token) throw new Error(`oauth2 refresh ${res.status}: ${j?.error ?? ""} ${j?.error_description ?? ""}`.trim());
     state = { access: j.access_token, refresh: j.refresh_token ?? s.refresh, expiresAt: Date.now() + (Number(j.expires_in) || 7200) * 1000 };
     if (file) {
-      try { await Bun.write(file, JSON.stringify(state)); } catch (e) { console.warn(`announce: token file not written: ${String((e as Error)?.message ?? e)}`); }
+      try { await atomicJson(file, state); } catch (e) { console.warn(`announce: token file not written: ${String((e as Error)?.message ?? e)}`); }
     }
     console.log(`announce: oauth2 token refreshed, good for ${Math.round((state.expiresAt - Date.now()) / 60000)} min`);
     return true;
@@ -383,7 +409,10 @@ export async function post(auth: Auth, m: Mint): Promise<string> {
   let res = await send();
   if (res.status === 401 && (await auth.refresh().catch(() => false))) res = await send();
   const j = (await res.json().catch(() => null)) as { data?: { id?: string } } | null;
-  if (!res.ok || !j?.data?.id) throw new Error(`post ${res.status}: ${JSON.stringify(j).slice(0, 300)}`);
+  if (!res.ok || !j?.data?.id) {
+    const ErrorType = res.status >= 400 && res.status < 500 ? DefiniteSendError : Error;
+    throw new ErrorType(`post ${res.status}: ${JSON.stringify(j).slice(0, 300)}`);
+  }
   return j.data.id;
 }
 
@@ -397,76 +426,67 @@ export function fresh(now: Mint[], seen: Set<string>): Mint[] {
   return now.filter((m) => !seen.has(m.key));
 }
 
-const seen = new Set<string>();
 /** UTC hour after which the daily note goes out; -1 turns it off. */
 /** UTC hours at which the promos go out, one collection each; empty turns them off. */
 let promoHours: number[] = [8, 14, 20];
 const status: Omit<AnnouncerStatus, "llm"> = { enabled: false, auth: null, fc: { fid: null, posted: 0, failed: 0, lastError: null }, dryRun: false, seeded: false, seen: 0, posted: 0, failed: 0, lastPostAt: null, lastError: null };
-export const announcerStatus = (): AnnouncerStatus => ({ ...status, fc: { ...status.fc }, seen: seen.size, llm: llmStatus() });
+export const announcerStatus = (): AnnouncerStatus => ({ ...status, fc: { ...status.fc }, seen: queue?.summary().jobs ?? 0, llm: llmStatus() });
 
-/**
- * The cast for one post: the same words, the picture and the page as embeds.
- * A failure is counted and logged, never retried: the post is already on X
- * and a retry would cast it twice on the next success.
- */
-async function cast(fc: Fc, m: Mint, text: string): Promise<void> {
-  try {
-    const hash = await submitCast(fc, castText(text, m.brief.url), [m.image, m.brief.url]);
-    status.fc.posted++;
-    console.log(`announce: ${m.key} cast as ${hash}`);
-  } catch (e) {
-    status.fc.failed++;
-    status.fc.lastError = String((e as Error)?.message ?? e);
-    console.warn(`announce: ${m.key} cast failed: ${status.fc.lastError}`);
-  }
-}
+let queue: DeliveryQueue | null = null;
+let queueReady: Promise<void> | null = null;
+let roundRunning: Promise<Mint[]> | null = null;
+export const deliveryStatus = () => queue?.summary() ?? { jobs: 0, pending: 0, uncertain: 0, sent: 0 };
 
-async function loadSeen(file: string): Promise<void> {
-  try {
-    const j = await Bun.file(file).json();
-    if (Array.isArray(j)) for (const k of j) if (typeof k === "string") seen.add(k);
-  } catch {}
-}
-async function saveSeen(file: string | undefined): Promise<void> {
-  if (!file) return;
-  try { await Bun.write(file, JSON.stringify([...seen])); } catch (e) { console.warn(`announce: state not saved: ${String((e as Error)?.message ?? e)}`); }
-}
-
-/** One round: read, diff, post. Exported so a test can run it without the timer. */
-export async function round(auth: Auth | null, file?: string, fc: Fc | null = null): Promise<Mint[]> {
-  const now = await currentMints();
-  if (!status.seeded) {
-    for (const m of now) seen.add(m.key);
-    status.seeded = true;
-    await saveSeen(file);
-    console.log(`announce: seeded with ${seen.size} tokens, watching ${COLLECTIONS.map((c) => c.slug).join(", ")}`);
-    return [];
-  }
-  const promo = promoHours.length ? await promoMint(promoHours) : null;
-  const todo = fresh(now, seen);
-  if (promo && !seen.has(promo.key)) todo.push(promo);
-  const out: Mint[] = [];
-  for (const m of todo) {
-    try {
-      if (status.dryRun || (!auth && !fc)) console.log(`announce (dry run): ${m.text.replace(/\n/g, " ")} [${m.image}]`);
-      else {
-        const text = (await llmPost(m.brief)) ?? m.text;
-        // X first: its failure throws and the post is retried next round. The cast follows and never throws.
-        if (auth) console.log(`announce: ${m.key} posted as ${await post(auth, { ...m, text })}${text === m.text ? " (template)" : " (llm)"}`);
-        if (fc) await cast(fc, m, text);
-      }
-      seen.add(m.key);
-      status.posted++;
-      status.lastPostAt = new Date().toISOString();
-      out.push(m);
-    } catch (e) {
-      // Left out of `seen`, so the next round tries again.
-      status.failed++;
-      status.lastError = String((e as Error)?.message ?? e);
-      console.warn(`announce: ${m.key} failed: ${status.lastError}`);
+/** Fetch every page from the last durable cursor; a failed collection keeps its cursor. */
+export async function collectPages(q: DeliveryQueue, channels: Channel[], collections = ANNOUNCED): Promise<void> {
+  for (const c of collections) {
+    const namespace = c.slug + ':8453:' + c.contract.toLowerCase();
+    for (let page = 0; page < 3; page++) {
+      const cursor = q.state.cursors[namespace];
+      const j = await getJson(baseOf(c) + '/api/mints?after=' + (cursor ?? 'latest') + '&limit=100');
+      if (!isObj(j) || j.version !== 1 || j.namespace !== '8453:' + c.contract.toLowerCase() || !Array.isArray(j.items)) throw new Error(c.slug + ': invalid mint page identity');
+      const next = count(j.nextCursor), head = count(j.head);
+      if (next === null || head === null || next > head || (cursor !== undefined && next < cursor)) throw new Error(c.slug + ': invalid mint cursor');
+      const mints = c.kind === 'daily' ? j.items.map((item) => dailyMint(c,item)).filter((m): m is Mint => m !== null) : c.kind === 'coins' ? coinMints(c,{recent:j.items}) : rollMints(c,{recent:j.items});
+      if (typeof j.hasMore !== "boolean" || (cursor === undefined && (next !== head || j.hasMore)) || (cursor !== undefined && mints.length === 0 && next !== cursor) || new Set(mints.map(m => m.id)).size !== mints.length || (mints.length > 0 && Math.max(...mints.map(m => m.id)) !== next) || mints.length !== j.items.length || mints.some((m) => m.id > next || m.id <= (cursor ?? head))) throw new Error(c.slug + ': incomplete mint page');
+      for (const m of mints) m.key = namespace + ':' + m.id;
+      if (cursor !== undefined && j.hasMore === true && next <= cursor) throw new Error(c.slug + ': stalled mint cursor');
+      await q.ingest(namespace,next,mints,channels);
+      if (j.hasMore !== true || cursor === undefined) break;
     }
   }
-  if (out.length) await saveSeen(file);
+}
+
+/** One worker owns discovery and delivery; interval overlap cannot send a second copy. */
+export function round(auth: Auth | null, file?: string, fc: Fc | null = null): Promise<Mint[]> {
+  if (roundRunning) return roundRunning;
+  roundRunning = runRound(auth,file,fc).finally(() => { roundRunning = null; });
+  return roundRunning;
+}
+async function runRound(auth: Auth | null, file?: string, fc: Fc | null = null): Promise<Mint[]> {
+  const dry = status.dryRun || (!auth && !fc);
+  if (!dry && !file) throw new Error('ANNOUNCE_STATE_FILE is required before sending');
+  if (!queue) { queue = new DeliveryQueue(dry && file ? file + '.dry-run' : file); queueReady = queue.load(); }
+  await queueReady;
+  const q = queue;
+  const channels: Channel[] = dry ? ['x'] : [...(auth ? ['x' as const] : []), ...(fc ? ['fc' as const] : [])];
+  for (const c of ANNOUNCED) {
+    try { await collectPages(q,channels,[c]); }
+    catch(e) { status.failed++; status.lastError = String((e as Error).message).replace(/https?:\/\/\S+/g,'[upstream]').slice(0,200); }
+  }
+  status.seeded = true;
+  const promo = promoHours.length ? await promoMint(promoHours) : null;
+  if (promo) await q.promo(promo,channels);
+  const out: Mint[] = [];
+  await q.deliver(async(job) => {
+    if (!job.text) job.text = dry || job.mint.slug === "one" ? job.mint.text : (await llmPost(job.mint.brief)) ?? job.mint.text;
+    if (fc && !job.fcBody && !dry) job.fcBody = Buffer.from(await buildCast(fc,castText(job.text,job.mint.brief.url),[job.mint.image,job.mint.brief.url])).toString('base64');
+  }, {
+    x: dry ? async(job) => { console.log('announce (dry run): ' + job.text); out.push(job.mint); return 'dry-run'; } : auth ? async(job) => {
+      let id: string; try { id = await post(auth,{...job.mint,text:job.text!}); } catch(e) { status.failed++; status.lastError = "X delivery failed; see delivery queue"; throw e; } status.posted++; status.lastPostAt = new Date().toISOString(); out.push(job.mint); return id;
+    } : undefined,
+    fc: !dry && fc ? async(job) => { let id: string; try { id=await submitCastBytes(fc,Buffer.from(job.fcBody!,'base64')); } catch(e) { status.fc.failed++; status.fc.lastError = 'Farcaster delivery failed; see delivery queue'; throw e; } status.fc.posted++; return id; } : undefined,
+  });
   return out;
 }
 
@@ -475,7 +495,7 @@ export function startAnnouncer(env: Record<string, string | undefined> = process
   const auth = authFromEnv(env);
   const fc = fcFromEnv(env);
   status.dryRun = env.ANNOUNCE_DRY_RUN === "1";
-  promoHours = (env.ANNOUNCE_PROMO_HOURS_UTC ?? "8,14,20").split(",").map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n >= 0 && n < 24).sort((a, b) => a - b);
+  promoHours = (env.ANNOUNCE_PROMO_HOURS_UTC ?? "8,14,20").split(",").filter((s) => s.trim() !== "").map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n >= 0 && n < 24).sort((a, b) => a - b);
   if (!auth && !fc && !status.dryRun) {
     console.log("announce: off, no X keys and no Farcaster key in the env");
     return false;
@@ -486,10 +506,7 @@ export function startAnnouncer(env: Record<string, string | undefined> = process
   const every = Math.max(15_000, Number(env.ANNOUNCE_EVERY_MS ?? 60_000));
   const file = env.ANNOUNCE_STATE_FILE;
   const tick = async () => {
-    if (file && !status.seeded && seen.size === 0) await loadSeen(file);
-    // A saved seen set means the boot already happened once; only post from then on.
-    if (file && seen.size > 0) status.seeded = true;
-    await round(auth, file, fc).catch((e) => console.warn(`announce: round failed: ${String((e as Error)?.message ?? e)}`));
+    await round(auth, file, fc).catch(() => { status.failed++; status.lastError = "Announcer round failed; inspect state file and upstream health"; console.warn(status.lastError); });
   };
   void tick();
   setInterval(() => void tick(), every);

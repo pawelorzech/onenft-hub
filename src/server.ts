@@ -1,7 +1,7 @@
 import { allStates, walletOf } from "./state.ts";
 import { homePage, walletPage, goTarget, SITE } from "./site.ts";
 import { COLLECTIONS } from "./collections.ts";
-import { startAnnouncer, announcerStatus } from "./announce.ts";
+import { startAnnouncer, announcerStatus, deliveryStatus } from "./announce.ts";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const BOOT_AT = Date.now();
@@ -47,11 +47,11 @@ async function route(url: URL): Promise<Response> {
   const wallet = path.match(/^\/(api\/)?wallet\/([^/]+?)(\.json)?$/);
   if (!OWN.has(path) && !wallet) return redirect(`${KNOT}${path}${url.search}`);
   // Liveness never waits on an upstream; readiness reports each one.
-  if (path === "/health") { const a = announcerStatus(); return new Response(`ok, ${COLLECTIONS.length} collections, up ${Math.floor((Date.now() - BOOT_AT) / 1000)} s, announcer ${a.enabled ? `on${a.dryRun ? " (dry run)" : ""} (${a.auth ?? "no auth"}), ${a.seen} seen, ${a.posted} posted, ${a.failed} failed${a.lastError ? `, last error: ${a.lastError}` : ""}, farcaster ${a.fc.fid ? `fid ${a.fc.fid}: ${a.fc.posted} cast, ${a.fc.failed} failed${a.fc.lastError ? `, last error: ${a.fc.lastError}` : ""}` : "off"}, llm ${a.llm.model ? `${a.llm.model}: ${a.llm.used} used, ${a.llm.rejected} rejected, ${a.llm.failed} failed` : "off"}` : "off"}`); }
+  if (path === "/health") { const a = announcerStatus(); return new Response(`ok, ${COLLECTIONS.length} collections, up ${Math.floor((Date.now() - BOOT_AT) / 1000)} s, delivery ${JSON.stringify(deliveryStatus())}, announcer ${a.enabled ? `on${a.dryRun ? " (dry run)" : ""} (${a.auth ?? "no auth"}), ${a.seen} seen, ${a.posted} posted, ${a.failed} failed${a.lastError ? `, last error: ${a.lastError}` : ""}, farcaster ${a.fc.fid ? `fid ${a.fc.fid}: ${a.fc.posted} cast, ${a.fc.failed} failed${a.fc.lastError ? `, last error: ${a.fc.lastError}` : ""}` : "off"}, llm ${a.llm.model ? `${a.llm.model}: ${a.llm.used} used, ${a.llm.rejected} rejected, ${a.llm.failed} failed` : "off"}` : "off"}`); }
   if (path === "/ready") {
     const states = await allStates();
     const ok = states.some((s) => s.status.known);
-    return json({ ok, collections: states.map((s) => ({ slug: s.c.slug, known: s.status.known, stale: s.status.stale, ageSeconds: s.status.ageSeconds, error: s.status.error, upstream: s.upstream })) }, 0, ok ? 200 : 503);
+    return json({ ok, delivery: deliveryStatus(), collections: states.map((s) => ({ slug: s.c.slug, known: s.status.known, stale: s.status.stale, ageSeconds: s.status.ageSeconds, error: s.status.error, upstream: s.upstream })) }, 0, ok ? 200 : 503);
   }
   if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\nDisallow: /wallet/\nDisallow: /api/\n", { headers: { "content-type": "text/plain" } });
   if (path === "/go") return redirect(goTarget(url.searchParams.get("who"), "/wallet/", "/wallet"), 302);
@@ -67,7 +67,7 @@ async function route(url: URL): Promise<Response> {
     const w = await walletOf(who);
     if (wallet[1]) {
       const checked = w.states.filter((s) => s.ok).length;
-      return json({ site: SITE, address: w.address, name: w.name, checked, of: w.states.length, fetchedAt: new Date(w.fetchedAt).toISOString(), collections: w.states.map((s) => ({ slug: s.c.slug, name: s.c.name, host: s.c.host, ok: s.ok, error: s.error, fetchedAt: s.fetchedAt ? new Date(s.fetchedAt).toISOString() : null, tokens: s.tokens })) }, 0, checked ? 200 : 503);
+      return json({ site: SITE, address: w.address, name: w.name, checked, of: w.states.length, fetchedAt: new Date(w.fetchedAt).toISOString(), collections: w.states.map((s) => ({ slug: s.c.slug, name: s.c.name, host: s.c.host, ok: s.ok, error: s.error, data: s.data ?? null, fetchedAt: s.fetchedAt ? new Date(s.fetchedAt).toISOString() : null, tokens: s.tokens })) }, 0, checked ? 200 : 503);
     }
     return html(walletPage(await allStates(), w, who));
   }
@@ -98,7 +98,8 @@ async function route(url: URL): Promise<Response> {
 }
 
 if (import.meta.main) {
-  Bun.serve({ port: PORT, fetch: handle });
+  const server = Bun.serve({ port: PORT, fetch: handle });
+  if (process.send) process.send({ port: server.port });
   console.log(`${SITE} on :${PORT}`);
   startAnnouncer();
 }

@@ -50,8 +50,8 @@ export const COLLECTIONS: Collection[] = [
     pixel: true,
     repo: "https://github.com/pawelorzech/onenft-faces",
     contract: "0x7C745F4eA367A7A3CD596219A4E428F2eA9A8C4c",
-    // The second Faces contract (2026-09-06); OpenSea has not named its collection yet, so the link goes to the contract's assets.
-    opensea: "https://opensea.io/assets/base/0x7C745F4eA367A7A3CD596219A4E428F2eA9A8C4c/1",
+    // OpenSea collection for the second contract, verified 2026-09-07.
+    opensea: "https://opensea.io/collection/faces-onenft-click-973029926",
   },
   {
     slug: "one",
@@ -59,12 +59,12 @@ export const COLLECTIONS: Collection[] = [
     name: "ONE",
     host: "one.onenft.click",
     line: "Pixel coins backed by USDC, 25,000 a series.",
-    source: "Every coin holds 5, 10, 25 or 50 USDC in a vault that earns; burn it and the backing plus its yield comes back. Art and money never correlate: 50 Master Coins a series come from an urn nobody can steer, and a 5 USDC coin can be one of them. Burn after 30 days. It can lose you money.",
+    source: "Public coins start with 5, 10, 25 or 50 USDC deposited in a vault. Backing size does not change the odds of drawing one of 50 Master Coins per series. Burn after 30 days to redeem the vault shares, minus a fee on positive yield. The vault can lose value. It can lose you money.",
     pixel: true,
     repo: "https://github.com/pawelorzech/onenft-one",
     contract: "0x7A7dea7489708cc9b50831C364aCf6e95aA13b41",
-    // No OpenSea collection slug yet; the contract's first asset page lists the collection once it exists.
-    opensea: "https://opensea.io/assets/base/0x7A7dea7489708cc9b50831C364aCf6e95aA13b41/1",
+    // OpenSea collection for the live contract, verified 2026-09-07.
+    opensea: "https://opensea.io/collection/one-878836785",
   },
   {
     slug: "knot",

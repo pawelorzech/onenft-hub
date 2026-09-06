@@ -13,10 +13,16 @@
       },
     },
   },
+  "patchedDependencies": {
+    "@farcaster/core@0.20.0": "patches/@farcaster%2Fcore@0.20.0.patch",
+  },
+  "overrides": {
+    "@faker-js/faker": "10.5.0",
+  },
   "packages": {
     "@adraffy/ens-normalize": ["@adraffy/ens-normalize@1.11.1", "", {}, "sha512-nhCBV3quEgesuf7c7KYfperqSS14T8bYuvJ8PcLJp6znkZpFc0AuW4qBtr8eKVyPPe/8RSr7sglCWPU5eaxwKQ=="],
 
-    "@faker-js/faker": ["@faker-js/faker@7.6.0", "", {}, "sha512-XK6BTq1NDMo9Xqw/YkYyGjSsg44fbNwYRx7QK2CuoQgyy+f1rrTDHoExVM5PsyXCtfl2vs2vVJ0MN0yN6LppRw=="],
+    "@faker-js/faker": ["@faker-js/faker@10.5.0", "", {}, "sha512-bsxD8WLS5lIj7aaoCx1YJkktqYj5vlBUE6HWzu2Q51ksrGJ0H737ECCKlFU7Yf8Br45z9t99frBp/J7kzbMPAg=="],
 
     "@farcaster/core": ["@farcaster/core@0.20.0", "", { "dependencies": { "@faker-js/faker": "^7.6.0", "@noble/curves": "^1.0.0", "@noble/hashes": "^1.3.0", "bs58": "^5.0.0", "neverthrow": "^6.0.0", "viem": "^2.17.4" } }, "sha512-GXrT0MKStzu7bZPATPG8k8N6qMDLohvp2QZ9XkOXYIWVK9Fr9WUe86ic8EAwqeiCzYieWZU6NB7mkBq0vHY4iQ=="],
 

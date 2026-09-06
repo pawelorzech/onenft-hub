@@ -11,6 +11,29 @@ const knotToday = { day: 3, date: "2026-09-07", state: "taken", owner: "0x84Cf66
 const facesState = { totalSupply: 12, pending: 1, maxSupply: 10000, poolLeft: 49, chain: { known: true, stale: false, readAt: "2026-09-05T12:00:00Z" }, recent: [{ id: 12, owner: "0x2222222222222222222222222222222222222222", ownerName: null, treasury: false, image: "https://faces.onenft.click/face/12.svg", url: "https://faces.onenft.click/face/12" }] };
 const blitToday = { day: 3, date: "2026-09-07", state: "free", owner: null, ownerName: null, image: "https://blit.onenft.click/day/3.svg", url: "https://blit.onenft.click/day/3", colors: ["#000", "#fff", "#f00", "#0f0"] };
 
+test("project OpenSea links open collections and ONE states all mint costs", () => {
+  const page = homePage(states());
+  for (const c of COLLECTIONS) {
+    expect(c.opensea).toMatch(/^https:\/\/opensea\.io\/collection\/[^/?#]+$/);
+    expect(page).toContain(`href="${c.opensea}">OpenSea</a>`);
+  }
+  expect(page).toContain("ETH fee per coin");
+  expect(page).toContain("Public coins start with 5, 10, 25 or 50 USDC");
+  expect(page).not.toContain("Every coin starts with");
+  expect(page).toContain("95 percent of the pin fee going to the author and 5 percent to the keeper");
+  expect(page).not.toContain("USDC and nothing on top");
+  expect(page).not.toContain("fraction of a cent");
+});
+
+test("wallet exposes ownership age separately from a successful hub fetch", () => {
+  const c = COLLECTIONS.find((c) => c.slug === "one")!;
+  const page = walletPage(states(), { address: "0x2222222222222222222222222222222222222222", name: null, fetchedAt: Date.now(), states: [
+    { c, ok: true, tokens: [], facts: [], fetchedAt: Date.now(), error: null, data: { known: true, stale: true, readAt: new Date(Date.now() - 600_000).toISOString() } },
+  ] });
+  expect(page).toContain("Ownership checked 10 min ago; data may be out of date");
+  expect(page).toContain("Open collection to refresh ownership");
+});
+
 function states(withKnot = true): CollectionState[] {
   return COLLECTIONS.map((c) => {
     if (c.slug === "knot") return { c, today: withKnot ? todayOf(knotToday, c.host) : null, tally: withKnot ? { taken: 2, gaps: 0, author: 0 } : null, upstream: null, fetchedAt: Date.now(), status: withKnot ? OK : DOWN };

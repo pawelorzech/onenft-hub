@@ -47,3 +47,15 @@ test("a built cast is a valid signed CastAdd with the fid, the text and two url 
   const inChannel = Message.decode(await buildCast({ ...fc, channel: "https://onchainsummer.xyz" }, "gm", []));
   expect(inChannel.data!.castAddBody!.parentUrl).toBe("https://onchainsummer.xyz");
 });
+
+test("patched Farcaster factories work with Faker 10 in ESM and CommonJS", async () => {
+  const esm = await import("@farcaster/core");
+  const cjs = require("@farcaster/core");
+  for (const { Factories } of [esm, cjs]) {
+    expect(Factories.Fid.build()).toBeGreaterThan(0);
+    expect(new TextDecoder().decode(Factories.EnsName.build())).toMatch(/\.eth$/);
+    expect(Factories.OnChainEvent.build().blockTimestamp).toBeGreaterThan(0);
+    expect(Factories.StorageRentOnChainEvent.build().blockTimestamp).toBeGreaterThan(0);
+    expect(Factories.UserDataBody.build()).toBeDefined();
+  }
+});

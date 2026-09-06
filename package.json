@@ -14,5 +14,11 @@
   },
   "dependencies": {
     "@farcaster/core": "0.20.0"
+  },
+  "patchedDependencies": {
+    "@farcaster/core@0.20.0": "patches/@farcaster%2Fcore@0.20.0.patch"
+  },
+  "overrides": {
+    "@faker-js/faker": "10.5.0"
   }
 }

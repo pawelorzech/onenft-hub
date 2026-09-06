@@ -14,6 +14,7 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 export const DEFAULT_MODEL = "google/gemini-3.8-flash";
 
 export type Brief = {
+  requiredText?: string;
   /** What to say, one fact per line. */
   facts: string;
   /** The angle for this post: "a mint just happened", "what is open this morning", "last hours", "how it works". */
@@ -26,7 +27,7 @@ export type Brief = {
   reference: string;
 };
 
-export const VOICE = `You write short posts on X for onenft.click, a family of free on-chain art collections on Base: Knot (one Truchet knot a day), Blit (one Blitmap remix a day), Chain Run (one Chain Runner a day) and Faces (one pixel face per wallet a day, with traits you can pin). Everything is CC0, free, gas only, made by one person. Not an investment, no price, no roadmap, no hype.
+export const VOICE = `You write short posts on X for onenft.click, a family of on-chain art collections on Base: Knot (one Truchet knot a day), Blit (one Blitmap remix a day), Chain Run (one Chain Runner a day) and Faces (one pixel face per wallet a day, with traits you can pin). The daily art collections and Faces are free apart from gas. ONE is a separate paid coin experiment: it can lose money. Never call ONE free or promise returns. Use only the supplied facts, with no invented prices, counts or claims. No roadmap, no hype.
 
 Voice: plain words, active voice, no adverbs, no exclamation marks, no emoji, no hashtags inside sentences, no em dashes, nothing a reader could misunderstand. Say what happened or what is open, what the thing is in one line, and how to take part. Vary the opening and the rhythm from post to post; never start two posts the same way. You may be dry or wry, never salesy.
 
@@ -43,12 +44,14 @@ export const llmStatus = (env: Record<string, string | undefined> = process.env)
 
 /** Why an answer was not accepted, for the retry note and the log. */
 export function whyNot(text: string, b: Brief): string | null {
+  if (b.requiredText && !text.includes(b.requiredText)) return `keep this warning exactly: ${b.requiredText}`;
+  if (b.requiredText && /\b(risk.free|guaranteed|safe investment|cannot lose)\b/i.test(text)) return "do not promise safety or a return";
   if (!text.trim()) return "the answer was empty";
-  if (!text.includes(b.url)) return `the link ${b.url} must appear word for word on its own line`;
+  if (!text.split("\n").some(line => line.trim() === b.url)) return `the link ${b.url} must appear word for word on its own line`;
   if (xLength(text) > X_LIMIT) return `the post is ${xLength(text)} characters as X counts it; the limit is 260, cut it down`;
   if (/[—–]/.test(text)) return "no em dashes or en dashes; use a comma or a full stop";
   if (/\p{Extended_Pictographic}/u.test(text)) return "no emoji";
-  if (!b.tags.some((t) => text.includes(t))) return `end with 3 to 5 of these tags: ${b.tags.join(" ")}`;
+  if (!text.trim().split("\n").at(-1)!.split(/\s+/).every(t => b.tags.includes(t)) || !b.tags.some((t) => text.includes(t))) return `end with 3 to 5 of these tags: ${b.tags.join(" ")}`;
   const lines = text.trim().split("\n");
   if (lines.length < 2 || lines.length > 6) return "two to six lines: the text, the link on its own line, the tags on the last line";
   return null;

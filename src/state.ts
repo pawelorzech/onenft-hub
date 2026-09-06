@@ -225,7 +225,7 @@ export async function allStates(): Promise<CollectionState[]> {
 export type WalletToken = { id: number; unit: "day" | "face" | "coin"; label: string; image: string; url: string; caption: string; bg: string | null };
 /** One fact a collection states about the wallet: a figure and a line under it. Counts and ids only, nothing worth anything. */
 export type WalletFact = { figure: string; label: string };
-export type WalletState = { c: Collection; ok: boolean; tokens: WalletToken[]; facts: WalletFact[]; fetchedAt: number; error: string | null };
+export type WalletState = { c: Collection; ok: boolean; tokens: WalletToken[]; facts: WalletFact[]; fetchedAt: number; data?: Upstream | null; error: string | null };
 export type Wallet = { address: string | null; name: string | null; states: WalletState[]; fetchedAt: number };
 
 /** Normalize a collection's /api/holder answer. Daily collections list `days` with a `day`; rolls list `faces` with an `id`. */
@@ -267,6 +267,7 @@ export function factsOf(j: unknown): WalletFact[] {
 
 const WALLET_MAX = 200;
 const wallets = new Map<string, Wallet>();
+const walletReads = new Map<string, Promise<Wallet>>();
 
 /**
  * Every collection's /api/holder for one address or ENS name, in parallel. A
@@ -277,21 +278,32 @@ export async function walletOf(who: string): Promise<Wallet> {
   const key = who.toLowerCase();
   const hit = wallets.get(key);
   if (hit && Date.now() - hit.fetchedAt < TTL_MS) return hit;
+  const running = walletReads.get(key);
+  if (running) return running;
+  const read = loadWallet(who, key, hit).finally(() => walletReads.delete(key));
+  walletReads.set(key, read);
+  return read;
+}
+
+async function loadWallet(who: string, key: string, hit: Wallet | undefined): Promise<Wallet> {
   let addr: string | null = null, name: string | null = null;
   const states = await Promise.all(
     COLLECTIONS.map(async (c): Promise<WalletState> => {
       const old = hit?.states.find((s) => s.c.slug === c.slug);
       try {
         const j = await withDeadline(getJson(`${baseOf(c)}/api/holder/${encodeURIComponent(who)}`), WALLET_DEADLINE_MS);
+        const listKey = c.kind === "rolls" ? "faces" : c.kind === "coins" ? "coins" : "days";
+        if (!isObj(j) || !Array.isArray(j[listKey])) throw new Error("invalid holder response");
         if (isObj(j)) {
           if (!addr) addr = address(j.address);
           if (!name) name = ensName(j.name);
         }
-        return { c, ok: true, tokens: tokensOf(c, j), facts: factsOf(j), fetchedAt: Date.now(), error: null };
+        const data = upstreamOf({ chain: isObj(j.data) ? { ...j.data, known: typeof j.data.readAt === "string" && Number.isFinite(Date.parse(j.data.readAt)) } : j.chain });
+        return { c, ok: true, tokens: tokensOf(c, j), facts: factsOf(j), fetchedAt: Date.now(), data, error: null };
       } catch (e) {
         const error = String((e as Error)?.message ?? e).replace(/https?:\/\/\S+/g, "[upstream]").slice(0, 120);
         console.error(`${c.host} holder: ${error}`);
-        return old?.ok ? { ...old, ok: false, error } : { c, ok: false, tokens: [], facts: [], fetchedAt: 0, error };
+        return old ? { ...old, ok: false, error } : { c, ok: false, tokens: [], facts: [], fetchedAt: 0, error };
       }
     }),
   );

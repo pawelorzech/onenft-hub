@@ -67,6 +67,10 @@ export async function buildCast(fc: Fc, text: string, embeds: string[]): Promise
 /** Submits one cast to the hub. Returns the cast hash. */
 export async function submitCast(fc: Fc, text: string, embeds: string[]): Promise<string> {
   const body = await buildCast(fc, text, embeds);
+  return submitCastBytes(fc, body);
+}
+
+export async function submitCastBytes(fc: Fc, body: Uint8Array): Promise<string> {
   const res = await fetch(`${fc.hub}/v1/submitMessage`, { method: "POST", headers: { "content-type": "application/octet-stream" }, body: body as BodyInit, signal: AbortSignal.timeout(20_000) });
   const j = (await res.json().catch(() => null)) as { hash?: string; error?: string; error_detail?: string } | null;
   if (!res.ok || !j?.hash) throw new Error(`cast ${res.status}: ${(j?.error_detail ?? j?.error ?? JSON.stringify(j)).slice(0, 300)}`);
