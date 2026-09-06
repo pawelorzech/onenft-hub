@@ -59,7 +59,7 @@ export const TAGS: Record<string, string[]> = {
 const HOW: Record<Collection["kind"], string> = {
   daily: "Free to claim, gas only. One a day, first wallet wins.",
   rolls: "No fee unless you pin, gas only. Rare and legendary come from luck alone.",
-  coins: "The mint price is the backing, nothing on top. Burn to redeem.",
+  coins: "The mint price is the backing, nothing on top. Burn to redeem after 30 days. It can lose you money.",
 };
 /** The collections the announcer speaks about: a preview site is shown on the hub but never announced. */
 export const ANNOUNCED: Collection[] = COLLECTIONS.filter((c) => !c.preview);

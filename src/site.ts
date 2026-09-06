@@ -179,8 +179,10 @@ const UMAMI_URL = process.env.UMAMI_URL ?? "";
 const UMAMI_WEBSITE_ID = process.env.UMAMI_WEBSITE_ID ?? "";
 const ANALYTICS = UMAMI_URL && UMAMI_WEBSITE_ID ? `<script defer src="${esc(UMAMI_URL)}/script.js" data-website-id="${esc(UMAMI_WEBSITE_ID)}"></script>` : "";
 const FONTS = `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Newsreader:opsz,wght@6..72,400&display=swap">`;
+/** ONE facts the hub states; they mirror one.onenft.click/spec.json, and a test checks the live spec against them. */
+const ONE_SERIES = 25000, ONE_MASTERS = 50, ONE_FOUNDERS = 100, ONE_FOUNDER_WINDOW = 1000, ONE_FEE_PCT = 10, ONE_LOCK_DAYS = 30, ONE_CLASSES = "5, 10, 25 or 50";
 const daily = COLLECTIONS.filter((c) => c.kind === "daily");
-const DESCRIPTION = `${COLLECTIONS.length} on-chain collections on Base. ${daily.map((c) => c.name).join(", ")} offer one token per UTC day; Faces lets each wallet roll one face a day, up to ${num(FACES_MAX)}; ONE mints pixel coins backed by USDC. CC0.`;
+const DESCRIPTION = `${COLLECTIONS.length} on-chain collections on Base. ${daily.map((c) => c.name).join(", ")} offer one token per UTC day; Faces lets each wallet roll one face a day, up to ${num(FACES_MAX)}; ONE mints pixel coins that hold USDC in a lending vault and can lose it. CC0.`;
 /** What one token of a collection is called in a link or a label. */
 export function tokenWord(c: Collection, n: number): string {
   return c.kind === "rolls" ? `Face #${num(n)}` : c.kind === "coins" ? `Coin #${num(n)}` : `Day ${num(n)}`;
@@ -318,29 +320,38 @@ export function homePage(states: CollectionState[]): string {
 <aside><div class="stick">
 ${crumb()}
 <h1 class="syne">On-chain art, one day at a time.</h1>
-<p class="lead">Explore ${COLLECTIONS.length} collections on Base. ${dailyList} offer one token per UTC day. Faces lets each wallet roll once a day, while supply remains.</p>
+<p class="lead">Explore ${COLLECTIONS.length} collections on Base. ${dailyList} offer one token per UTC day. Faces lets each wallet roll once a day, while supply remains. ONE mints pixel coins that hold USDC in a lending vault; ONE can lose you money, so read its page before you mint.</p>
 </div></aside>
 <main id="main">
-<nav class="sitenav small" aria-label="Site">${states.map((s) => `<a href="#${s.c.slug}">${esc(s.c.name)}</a>`).join("")}<a href="#format">The format</a><a href="/wallet">Your wallet</a></nav>
+<nav class="sitenav small" aria-label="Site">${states.map((s) => `<a href="#${s.c.slug}">${esc(s.c.name)}</a>`).join("")}<a href="#experiments">The experiments</a><a href="/wallet">Your wallet</a></nav>
 ${states.map(collectionBlock).join("\n")}
 <section class="counts syne" aria-label="Totals"><div><b>${known.length ? num(taken) : "?"}</b><span class="small">${plural(taken, "day", "days")} claimed across ${known.length} of ${daily.length} daily collections</span></div><div><b>${known.length ? num(gaps) : "?"}</b><span class="small">${plural(gaps, "gap", "gaps")}</span></div><div><b>${rolled === null ? "?" : num(rolled)}</b><span class="small">${plural(rolled ?? 0, "face", "faces")} rolled</span></div></section>
-<div class="prose" id="format">
-<h2 class="syne">The format</h2>
-<p>The daily collections (${dailyList}) follow the same rules. One token a day, <code>tokenId</code> equal to the day number, day 1 on 5 September 2026. The day is <code>block.timestamp / 86400</code>, rounded down. The image is built by a renderer contract from the day number alone and returned as a <code>data:</code> URI. The image and its rules live on chain; this site and the collection sites only show them, and they need a working chain connection to do so.</p>
+<div class="prose" id="experiments">
+<h2 class="syne">The experiments</h2>
+<p>Five collections, one question each. Every image is drawn by a contract on Base and returned from <code>tokenURI</code> as a <code>data:</code> URI, so no server, file store or company has to stay alive for the token to keep its picture. Everything is CC0: take the images, remix them, mint them elsewhere. None of this is an investment, and ONE, the one that holds money, can lose it.</p>
+<h3 class="syne">Faces</h3>
+<p>One pixel face per wallet each UTC day, free, while supply remains. You can pin up to ${FACES_MAX_PINS} traits and colours for a fee that starts at ${FACES_FIRST_PIN_ETH} ETH and doubles with every pin, up to ${FACES_ALL_PINS_ETH} ETH for all of them, and the fee goes to the author. Rare and legendary parts come only from luck, and any roll can take a one of one from a pool that empties with the supply. The question: does a face you shaped yourself mean more to you than one you were handed? The collection ends at ${num(FACES_MAX)} faces.</p>
+<h3 class="syne">ONE</h3>
+<p>A pixel coin that holds real USDC. You mint for ${ONE_CLASSES} USDC and nothing on top; the contract puts that USDC into a third-party lending vault on Base and your coin holds the shares. The art comes from a Chainlink VRF seed and an urn of ${num(ONE_SERIES)} slots a series, ${ONE_MASTERS} of them Master Coins, so paying more buys no better odds and a ${ONE_CLASSES.split(",")[0]} USDC coin can be a Master Coin. Burn the coin after ${ONE_LOCK_DAYS} days and the backing plus its yield comes back, minus a ${ONE_FEE_PCT} percent fee on the yield, which is the author's whole cut. The author also takes ${ONE_FOUNDERS} founder coins a series, minted inside the first ${num(ONE_FOUNDER_WINDOW)} positions with no backing until fees fill them. The question: does a picture change how you hold money? ONE can lose you money: if the vault is hacked, drained or frozen, the coins hold nothing and nobody makes it up; yield can be zero; there may be no buyers at any price; the odds that it earns you nothing are large. Put in only what you can lose, and read <a href="https://one.onenft.click/how">how it works</a> first.</p>
+<h3 class="syne">Knot</h3>
+<p>One Truchet knot a day, computed from the day number alone: sixteen palettes, ten traits, one grid of arcs and lines. Nobody picks the image and nobody can delay it. A day nobody claims stays empty for good, and the gaps are part of the work. The question: is a calendar a collection?</p>
+<h3 class="syne">Blit</h3>
+<p>One remix a day of the 100 CC0 Blitmap originals: the composition of one with the palette of another, every pair once in 9,900 days. The question: what happens to a finished work when a clock keeps recombining it for 27 years?</p>
+<h3 class="syne">Chain Run</h3>
+<p>One Chain Runner a day, drawn from the 338 CC0 Chain Runners layers with the original's own weight tables and thirteen draws seeded with the day. The question: can a collection that ended on Ethereum keep producing on Base without anyone at the wheel?</p>
+<h3 class="syne">Rules the daily ones share</h3>
 <ul>
-<li>0 ETH mint fee, network gas only. No price, no royalties, no allowlist. Not an investment.</li>
+<li><code>tokenId</code> equals the day number; day 1 was 5 September 2026; the day is <code>block.timestamp / 86400</code>, rounded down.</li>
+<li>0 ETH mint fee, network gas only. No price, no royalties, no allowlist.</li>
 <li>Every tenth day up to day 1000 goes to the author. That is the whole cut, written into the contract on day one.</li>
-<li>A day nobody claims stays empty. It can no longer be minted once the day has ended; the gaps are part of the work.</li>
-<li>Images are CC0. Each site's assets page says what else is, and under which license.</li>
-<li>The daily collections share one token contract, <a href="${TOKEN_CONTRACT}">OneNFT.sol</a>; only the renderer differs, and only the renderer can be swapped, for future days only.</li>
+<li>A day nobody claims stays empty. It cannot be minted once the day has ended.</li>
+<li>They share one token contract, <a href="${TOKEN_CONTRACT}">OneNFT.sol</a>; only the renderer differs, and the author can swap a renderer for future days only.</li>
 </ul>
-<p><strong>Faces</strong> has its own contract and its own rules: one roll per wallet each UTC day while supply remains, up to ${FACES_MAX_PINS} pins for a fee that starts at ${FACES_FIRST_PIN_ETH} ETH and doubles with every pin up to ${FACES_ALL_PINS_ETH} ETH, a cap of ${num(FACES_MAX)}, and a pool of one of ones that empties with the supply. Its API differs too. Everything is on <a href="https://faces.onenft.click/how">its how page</a>.</p>
-<p>Each daily site has a <code>/how</code> page that writes the draw out in full so you can port it to any language, a <code>/spec.json</code> with the tables, and a JSON API at <code>/api/today</code>, <code>/api/summary</code>, <code>/api/day/N</code> and <code>/api/days</code>. Faces answers at <code>/api/state</code>. This page reads those. Its own list is at <a href="/api/collections.json">/api/collections.json</a>.</p>
-<p>The page borrows its colors from the knot of the day, the way each collection borrows from its own day. There is no light or dark mode.</p>
+<p>Each site has a <code>/how</code> page that writes its draw out in full so you can port it, a <code>/spec.json</code> with the tables, and a JSON API. This page reads those; its own list is at <a href="/api/collections.json">/api/collections.json</a>. The page borrows its colours from the knot of the day. There is no light or dark mode.</p>
 <h2 class="syne">Start one</h2>
 <p>Take <a href="${TOKEN_CONTRACT}">the token contract</a>, write a renderer, and point the site code at it. The ${daily.length} daily repos above are the worked examples. If you ship one, say so and it can be listed here.</p>
 </div>
-<footer><span>This is not an investment and never will be. Images are CC0.</span><nav aria-label="Footer"><a href="/wallet">Your wallet</a>${COLLECTIONS.map((c) => `<a href="https://${c.host}">${esc(c.name)}</a>`).join("")}<a href="/api/collections.json">JSON</a><a href="${REPO}">Code</a></nav></footer>
+<footer><span>This is not an investment and never will be. ONE holds USDC and can lose it. Images are CC0.</span><nav aria-label="Footer"><a href="/wallet">Your wallet</a>${COLLECTIONS.map((c) => `<a href="https://${c.host}">${esc(c.name)}</a>`).join("")}<a href="/api/collections.json">JSON</a><a href="${REPO}">Code</a></nav></footer>
 </main>
 </div>`;
   return layout(`${SITE}, on-chain art, one day at a time`, p, body, ogImage, "/");
