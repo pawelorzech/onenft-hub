@@ -62,7 +62,7 @@ const HOW: Record<Collection["kind"], string> = {
   coins: "The mint price is the backing, nothing on top. Burn to redeem after 30 days. It can lose you money.",
 };
 /** The collections the announcer speaks about: a preview site is shown on the hub but never announced. */
-export const ANNOUNCED: Collection[] = COLLECTIONS.filter((c) => !c.preview);
+export const ANNOUNCED: Collection[] = COLLECTIONS.filter((c) => !c.preview && c.announce !== false);
 
 export const X_LIMIT = 280;
 /** Length as X counts it: every link is 23, the rest by code point. */

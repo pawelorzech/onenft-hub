@@ -16,6 +16,8 @@ export type Collection = {
   kind: "daily" | "rolls" | "coins";
   /** True while the site runs without a contract; the hub shows it but never announces it. */
   preview?: boolean;
+  /** False to show a collection without announcing its mints; set while ONE moves to a new contract. */
+  announce?: boolean;
   /** Short name shown on the page. */
   name: string;
   /** Host of the collection's own site. Its /api/today and /api/days feed this page. */
@@ -61,6 +63,7 @@ export const COLLECTIONS: Collection[] = [
     pixel: true,
     repo: "https://github.com/pawelorzech/onenft-one",
     contract: "0x4Bd8F79bE4862544cbA135b87a139Be0e3004a72",
+    announce: false,
     // No OpenSea collection slug yet; the contract's first asset page lists the collection once it exists.
     opensea: "https://opensea.io/assets/base/0x4Bd8F79bE4862544cbA135b87a139Be0e3004a72/1",
   },
