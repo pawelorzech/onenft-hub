@@ -1,6 +1,7 @@
 import { allStates, walletOf } from "./state.ts";
 import { homePage, walletPage, goTarget, SITE } from "./site.ts";
 import { COLLECTIONS } from "./collections.ts";
+import { startAnnouncer, announcerStatus } from "./announce.ts";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const BOOT_AT = Date.now();
@@ -46,7 +47,7 @@ async function route(url: URL): Promise<Response> {
   const wallet = path.match(/^\/(api\/)?wallet\/([^/]+?)(\.json)?$/);
   if (!OWN.has(path) && !wallet) return redirect(`${KNOT}${path}${url.search}`);
   // Liveness never waits on an upstream; readiness reports each one.
-  if (path === "/health") return new Response(`ok, ${COLLECTIONS.length} collections, up ${Math.floor((Date.now() - BOOT_AT) / 1000)} s`);
+  if (path === "/health") { const a = announcerStatus(); return new Response(`ok, ${COLLECTIONS.length} collections, up ${Math.floor((Date.now() - BOOT_AT) / 1000)} s, announcer ${a.enabled ? `on${a.dryRun ? " (dry run)" : ""}, ${a.seen} seen, ${a.posted} posted, ${a.failed} failed${a.lastError ? `, last error: ${a.lastError}` : ""}` : "off"}`); }
   if (path === "/ready") {
     const states = await allStates();
     const ok = states.some((s) => s.status.known);
@@ -99,4 +100,5 @@ async function route(url: URL): Promise<Response> {
 if (import.meta.main) {
   Bun.serve({ port: PORT, fetch: handle });
   console.log(`${SITE} on :${PORT}`);
+  startAnnouncer();
 }
