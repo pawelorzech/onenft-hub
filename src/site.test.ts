@@ -90,7 +90,9 @@ test("home page lists every collection, the totals, honest states and the audit 
   expect(h).toContain("--bg:#0b1d51;--fg:#f2e9d8");
   expect(h).toContain('og:image" content="https://knot.onenft.click/day/3.png"');
   expect(h).toContain("2 of 3 daily collections");
-  expect(h).toContain(`up to ${FACES_MAX_PINS} pins for a fee that starts at ${FACES_FIRST_PIN_ETH} ETH and doubles with every pin up to ${FACES_ALL_PINS_ETH} ETH`);
+  expect(h).toContain(`pin up to ${FACES_MAX_PINS} traits and colours for a fee that starts at ${FACES_FIRST_PIN_ETH} ETH and doubles with every pin, up to ${FACES_ALL_PINS_ETH} ETH`);
+  expect(h).toContain("ONE can lose you money");
+  expect(h).toContain("25,000 slots a series");
   expect(h).toContain(`pin up to ${FACES_MAX_PINS} traits and colours`);
   expect(h).not.toContain("up to three");
   expect(h).not.toContain("small fee");

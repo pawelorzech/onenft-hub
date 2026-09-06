@@ -323,12 +323,12 @@ ${crumb()}
 <p class="lead">Explore ${COLLECTIONS.length} collections on Base. ${dailyList} offer one token per UTC day. Faces lets each wallet roll once a day, while supply remains. ONE mints pixel coins that hold USDC in a lending vault; ONE can lose you money, so read its page before you mint.</p>
 </div></aside>
 <main id="main">
-<nav class="sitenav small" aria-label="Site">${states.map((s) => `<a href="#${s.c.slug}">${esc(s.c.name)}</a>`).join("")}<a href="#experiments">The experiments</a><a href="/wallet">Your wallet</a></nav>
+<nav class="sitenav small" aria-label="Site">${states.map((s) => `<a href="#${s.c.slug}">${esc(s.c.name)}</a>`).join("")}<a href="#experiments">The experiments</a><a href="#faq">Questions</a><a href="/wallet">Your wallet</a></nav>
 ${states.map(collectionBlock).join("\n")}
 <section class="counts syne" aria-label="Totals"><div><b>${known.length ? num(taken) : "?"}</b><span class="small">${plural(taken, "day", "days")} claimed across ${known.length} of ${daily.length} daily collections</span></div><div><b>${known.length ? num(gaps) : "?"}</b><span class="small">${plural(gaps, "gap", "gaps")}</span></div><div><b>${rolled === null ? "?" : num(rolled)}</b><span class="small">${plural(rolled ?? 0, "face", "faces")} rolled</span></div></section>
 <div class="prose" id="experiments">
 <h2 class="syne">The experiments</h2>
-<p>Five collections, one question each. Every image is drawn by a contract on Base and returned from <code>tokenURI</code> as a <code>data:</code> URI, so no server, file store or company has to stay alive for the token to keep its picture. Everything is CC0: take the images, remix them, mint them elsewhere. None of this is an investment, and ONE, the one that holds money, can lose it.</p>
+<p>Five collections, one question each. Every image is drawn by a contract on Base and returned from <code>tokenURI</code> as a <code>data:</code> URI, so no server, file store or company has to stay alive for the token to keep its picture. All of it is CC0: take the images, remix them, mint them elsewhere. None of this is an investment, and ONE, the one that holds money, can lose it.</p>
 <h3 class="syne">Faces</h3>
 <p>One pixel face per wallet each UTC day, free, while supply remains. You can pin up to ${FACES_MAX_PINS} traits and colours for a fee that starts at ${FACES_FIRST_PIN_ETH} ETH and doubles with every pin, up to ${FACES_ALL_PINS_ETH} ETH for all of them, and the fee goes to the author. Rare and legendary parts come only from luck, and any roll can take a one of one from a pool that empties with the supply. The question: does a face you shaped yourself mean more to you than one you were handed? The collection ends at ${num(FACES_MAX)} faces.</p>
 <h3 class="syne">ONE</h3>
@@ -348,6 +348,31 @@ ${states.map(collectionBlock).join("\n")}
 <li>They share one token contract, <a href="${TOKEN_CONTRACT}">OneNFT.sol</a>; only the renderer differs, and the author can swap a renderer for future days only.</li>
 </ul>
 <p>Each site has a <code>/how</code> page that writes its draw out in full so you can port it, a <code>/spec.json</code> with the tables, and a JSON API. This page reads those; its own list is at <a href="/api/collections.json">/api/collections.json</a>. The page borrows its colours from the knot of the day. There is no light or dark mode.</p>
+<h2 class="syne" id="faq">Questions</h2>
+<h3 class="syne">What is onenft.click?</h3>
+<p>Five small collections on Base, one author, one question each. The images, the rules and the contracts sit on the chain. All of it is CC0.</p>
+<h3 class="syne">Where does the image live?</h3>
+<p>In the contract. Call <code>tokenURI</code> and you get the SVG back as a <code>data:</code> URI. No server, no IPFS pin, no company has to outlive the token for the picture to stay.</p>
+<h3 class="syne">What does it cost?</h3>
+<p>Knot, Blit and Chain Run cost network gas and nothing else. Faces costs gas, plus a fee only when you pin traits. ONE costs the backing you choose, ${ONE_CLASSES} USDC, plus a fee of a fraction of a cent that pays Chainlink for the random seed, plus gas.</p>
+<h3 class="syne">Can I lose money on ONE?</h3>
+<p>Yes. Your USDC sits in a third-party lending vault; if that vault is hacked, drained or frozen, your coin holds nothing and nobody makes it up. Yield can be zero. Buyers may never come, at any price. The odds that ONE earns you nothing are large. Put in only what you can lose.</p>
+<h3 class="syne">Why does a day stay empty?</h3>
+<p>A daily token can be minted only on its own UTC day. When the day ends unclaimed, that number stays empty for good. You see the gaps on every calendar; they are part of the work.</p>
+<h3 class="syne">What does the author keep?</h3>
+<p>On the daily collections, every tenth day up to day 1000. On Faces, the pin fees. On ONE, ${ONE_FEE_PCT} percent of the yield and ${ONE_FOUNDERS} founder coins a series that start with no backing. No royalties anywhere, and no other cut.</p>
+<h3 class="syne">Can the author change my token?</h3>
+<p>No. Each token records the renderer it was minted with, and a new renderer reaches future tokens only. The daily contract has no other admin function. ONE's contract has no pause, no upgrade and no path to a holder's money; its owner can set a renderer for future coins and take fees the contract already set aside.</p>
+<h3 class="syne">How is randomness made?</h3>
+<p>The daily collections use the day number and nothing else, so you can compute tomorrow's image today. Faces mixes in the hash of a block after your commit. ONE asks Chainlink VRF for a seed and draws the art slot from an urn, so nobody, the author included, can pick who gets a Master Coin.</p>
+<h3 class="syne">What can I do with the images?</h3>
+<p>Anything. CC0 means print them, remix them, sell the prints, mint them elsewhere. No credit needed, no permission to ask.</p>
+<h3 class="syne">Is this an investment?</h3>
+<p>No. Nothing here promises a return. There are no royalties, no roadmap and no buyback. A token can be worth zero for as long as it exists.</p>
+<h3 class="syne">How do I see what a wallet holds?</h3>
+<p>Open <a href="/wallet">/wallet</a> here for every collection at once, or each site's <code>/yours</code> page. Viewing needs no signature and no transaction.</p>
+<h3 class="syne">Can I start my own?</h3>
+<p>Yes. Take the token contract below, write a renderer, point the site code at it. If you ship one, say so and it can be listed here.</p>
 <h2 class="syne">Start one</h2>
 <p>Take <a href="${TOKEN_CONTRACT}">the token contract</a>, write a renderer, and point the site code at it. The ${daily.length} daily repos above are the worked examples. If you ship one, say so and it can be listed here.</p>
 </div>
