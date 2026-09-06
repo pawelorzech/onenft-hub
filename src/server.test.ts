@@ -2,7 +2,7 @@
  * The hub as a process against fake collection sites: one answers, one hangs,
  * one returns junk, one is down. The page must render within the deadline with
  * the good one filled in and the others marked, never with zeros or gaps; the
- * wallet page must say "in 1 of 4"; twenty concurrent requests must share one
+ * wallet page must say "in 1 of 5"; twenty concurrent requests must share one
  * upstream read per collection.
  */
 import { expect, test, afterAll } from "bun:test";
@@ -35,7 +35,7 @@ test("one good, one hung, one junk, one down: the page renders within the deadli
   const good = fake((p) => p === "/api/summary" ? json({ today: { day: 3, date: "2026-09-07", state: "free", owner: null, ownerName: null, image: "https://knot.onenft.click/day/3.svg", url: "https://knot.onenft.click/day/3" }, tally: { taken: 2, gaps: 0, author: 0 }, palette: { bg: "#0b1d51", cord: "#f2e9d8" }, chain: { known: true, stale: false, readAt: "2026-09-07T00:00:00Z" } }) : p.startsWith("/api/holder/") ? json({ address: "0x84Cf6667FdE676a5950730720b67d62B9AB476Df", name: null, days: [{ day: 3, image: "https://knot.onenft.click/day/3.svg", url: "https://knot.onenft.click/day/3" }] }) : new Response("no", { status: 404 }));
   const hung = fake(() => new Promise<Response>(() => {}));
   const junk = fake(() => json({ today: { day: "NaN", state: "gap" }, tally: { taken: "x" }, recent: [{ id: -1 }], totalSupply: "lots" }));
-  const base = await boot({ UPSTREAM_OVERRIDE: JSON.stringify({ knot: good.url, blit: hung.url, chainrun: junk.url, faces: "http://127.0.0.1:9" }) });
+  const base = await boot({ UPSTREAM_OVERRIDE: JSON.stringify({ knot: good.url, blit: hung.url, chainrun: junk.url, faces: "http://127.0.0.1:9", one: "http://127.0.0.1:9" }) });
 
   const t0 = Date.now();
   const home = await (await fetch(`${base}/`)).text();
@@ -63,23 +63,23 @@ test("one good, one hung, one junk, one down: the page renders within the deadli
   expect(JSON.stringify(rj)).not.toContain("127.0.0.1");
 
   const wallet = await (await fetch(`${base}/wallet/0x84Cf6667FdE676a5950730720b67d62B9AB476Df`)).text();
-  expect(wallet).toContain("Found 1 token in 2 of 4 collections. Faces, Blit could not be checked.");
+  expect(wallet).toContain("Found 1 token in 2 of 5 collections. Faces, ONE, Blit could not be checked.");
   expect(wallet).toContain("could not be checked");
   const wj = await fetch(`${base}/api/wallet/0x84Cf6667FdE676a5950730720b67d62B9AB476Df.json`);
   expect(wj.status).toBe(200);
   const w = await wj.json();
   expect(w.checked).toBe(2);
-  expect(w.of).toBe(4);
+  expect(w.of).toBe(5);
   expect(w.collections.find((c: any) => c.slug === "blit").ok).toBe(false);
 }, 30000);
 
 test("every upstream down: the page still renders, ready is 503, the wallet JSON is 503 and still JSON", async () => {
-  const base = await boot({ UPSTREAM_OVERRIDE: JSON.stringify({ knot: "http://127.0.0.1:9", blit: "http://127.0.0.1:9", chainrun: "http://127.0.0.1:9", faces: "http://127.0.0.1:9" }) });
+  const base = await boot({ UPSTREAM_OVERRIDE: JSON.stringify({ knot: "http://127.0.0.1:9", blit: "http://127.0.0.1:9", chainrun: "http://127.0.0.1:9", faces: "http://127.0.0.1:9", one: "http://127.0.0.1:9" }) });
   const home = await fetch(`${base}/`);
   expect(home.status).toBe(200);
   const h = await home.text();
   expect(h).toContain("--bg:#f4f2ec");
-  expect((h.match(/Status unavailable/g) ?? []).length).toBe(4);
+  expect((h.match(/Status unavailable/g) ?? []).length).toBe(5);
   expect(h).toContain("<b>?</b>");
   expect((await fetch(`${base}/ready`)).status).toBe(503);
   const wj = await fetch(`${base}/api/wallet/0x84Cf6667FdE676a5950730720b67d62B9AB476Df.json`);

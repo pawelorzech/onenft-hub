@@ -180,7 +180,15 @@ const UMAMI_WEBSITE_ID = process.env.UMAMI_WEBSITE_ID ?? "";
 const ANALYTICS = UMAMI_URL && UMAMI_WEBSITE_ID ? `<script defer src="${esc(UMAMI_URL)}/script.js" data-website-id="${esc(UMAMI_WEBSITE_ID)}"></script>` : "";
 const FONTS = `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Newsreader:opsz,wght@6..72,400&display=swap">`;
 const daily = COLLECTIONS.filter((c) => c.kind === "daily");
-const DESCRIPTION = `${COLLECTIONS.length} on-chain collections on Base. ${daily.map((c) => c.name).join(", ")} offer one token per UTC day; Faces lets each wallet roll one face a day, up to ${num(FACES_MAX)}. CC0, gas only.`;
+const DESCRIPTION = `${COLLECTIONS.length} on-chain collections on Base. ${daily.map((c) => c.name).join(", ")} offer one token per UTC day; Faces lets each wallet roll one face a day, up to ${num(FACES_MAX)}; ONE mints pixel coins backed by USDC. CC0.`;
+/** What one token of a collection is called in a link or a label. */
+export function tokenWord(c: Collection, n: number): string {
+  return c.kind === "rolls" ? `Face #${num(n)}` : c.kind === "coins" ? `Coin #${num(n)}` : `Day ${num(n)}`;
+}
+/** The plural for "Your faces", "Your days". */
+export function tokensWord(c: Collection): string {
+  return c.kind === "rolls" ? "faces" : c.kind === "coins" ? "coins" : "days";
+}
 
 /** `path` is the page's own path; a wallet page is not indexed, since it names an address. */
 export function layout(title: string, p: Colors, body: string, image: string, path = "/", index = true, description?: string): string {
@@ -246,11 +254,12 @@ const DAILY_STATE: Record<string, string> = { author: "reserved for the author",
 
 function stateLine(s: CollectionState): string {
   const t = s.today;
-  if (s.c.kind === "rolls") {
+  if (s.c.kind === "rolls" || s.c.kind === "coins") {
     if (!s.rolls) return "";
-    if (!t) return `<p>Nobody has rolled yet.</p>`;
-    const who = t.state === "author" ? "the treasury's daily roll" : `held by ${esc(t.ownerName ?? shortAddr(t.owner ?? ""))}`;
-    return `<p><span class="syne" style="font-weight:700">Face #${num(t.day)}</span>, the newest, ${who}.</p>`;
+    if (!t) return `<p>Nobody has ${s.c.kind === "coins" ? "minted" : "rolled"} yet.</p>`;
+    const owner = t.ownerName ?? (t.owner ? shortAddr(t.owner) : null);
+    const who = t.state === "author" ? (s.c.kind === "coins" ? "a founder coin" : "the treasury's daily roll") : owner ? `held by ${esc(owner)}` : s.c.preview ? "from the preview series" : "";
+    return `<p><span class="syne" style="font-weight:700">${tokenWord(s.c, t.day)}</span>, the newest${who ? `, ${who}` : ""}.</p>`;
   }
   if (!t) return "";
   const owner = t.ownerName ?? (t.owner ? shortAddr(t.owner) : null);
@@ -259,10 +268,11 @@ function stateLine(s: CollectionState): string {
 }
 
 function tallyBlock(s: CollectionState): string {
-  if (s.c.kind === "rolls") {
+  if (s.c.kind === "rolls" || s.c.kind === "coins") {
     const r = s.rolls;
     if (!r) return "";
-    return `<div class="tally syne"><div><b>${num(r.rolled)}</b><span>of ${num(r.max)} rolled</span></div>${r.pending ? `<div><b>${num(r.pending)}</b><span>being revealed</span></div>` : ""}<div><b>${num(r.poolLeft)}</b><span>one of ones left</span></div></div>`;
+    const coins = s.c.kind === "coins";
+    return `<div class="tally syne"><div><b>${num(r.rolled)}</b><span>of ${num(r.max)} ${coins ? `minted${s.c.preview ? " in the preview" : ""}` : "rolled"}</span></div>${r.pending ? `<div><b>${num(r.pending)}</b><span>being revealed</span></div>` : ""}<div><b>${num(r.poolLeft)}</b><span>${coins ? "Master Coins left" : "one of ones left"}</span></div></div>`;
   }
   const y = s.tally;
   if (!y) return "";
@@ -271,9 +281,9 @@ function tallyBlock(s: CollectionState): string {
 
 function collectionBlock(s: CollectionState, i: number): string {
   const c = s.c;
-  const img = s.today?.image ?? `https://${c.host}/today.svg`;
+  const img = s.today?.image ?? (c.kind === "coins" ? `https://${c.host}/newest.svg` : `https://${c.host}/today.svg`);
   const tokenUrl = s.today?.url ?? null;
-  const alt = c.kind === "rolls" ? (s.today ? `Face #${s.today.day}, the newest at ${c.host}` : `The newest face at ${c.host}`) : (s.today ? `Day ${s.today.day} at ${c.host}` : `Today at ${c.host}`);
+  const alt = c.kind !== "daily" ? (s.today ? `${tokenWord(c, s.today.day)}, the newest at ${c.host}` : `The newest at ${c.host}`) : (s.today ? `Day ${s.today.day} at ${c.host}` : `Today at ${c.host}`);
   return `<section class="coll" id="${c.slug}" aria-labelledby="h-${c.slug}">
 <a href="${tokenUrl ?? `https://${c.host}/`}" aria-label="${esc(alt)}"><img class="art${c.pixel ? " pixel" : ""}" src="${esc(img)}" alt="" width="396" height="396"${i === 0 ? ' fetchpriority="high"' : ' loading="lazy"'}></a>
 <div class="meta">
@@ -284,10 +294,10 @@ ${tallyBlock(s)}
 ${freshness(s)}
 <div class="ctas">
 <a class="cta syne" href="https://${c.host}/">Explore ${esc(c.name)}</a>
-${tokenUrl ? `<a class="cta ghost syne" href="${esc(tokenUrl)}">${c.kind === "rolls" ? `Face #${num(s.today!.day)}` : `Day ${num(s.today!.day)}`}, the one above</a>` : ""}
+${tokenUrl ? `<a class="cta ghost syne" href="${esc(tokenUrl)}">${tokenWord(c, s.today!.day)}, the one above</a>` : ""}
 </div>
 <p class="small">${c.host}</p>
-<nav class="links small" aria-label="${esc(c.name)} links"><a href="https://${c.host}/how">How it works</a><a href="https://${c.host}/yours">Your ${c.kind === "rolls" ? "faces" : "days"}</a><a href="${c.opensea}">OpenSea</a>${c.contract ? `<a href="https://basescan.org/address/${c.contract}">Contract</a>` : ""}<a href="${c.repo}">Code</a></nav>
+<nav class="links small" aria-label="${esc(c.name)} links"><a href="https://${c.host}/how">How it works</a><a href="https://${c.host}/yours">Your ${tokensWord(c)}</a>${c.opensea ? `<a href="${c.opensea}">OpenSea</a>` : ""}${c.contract ? `<a href="https://basescan.org/address/${c.contract}">Contract</a>` : ""}<a href="${c.repo}">Code</a></nav>
 </div>
 </section>`;
 }
@@ -418,7 +428,7 @@ export function goTarget(who: string | null, base = "/", back = "/yours"): strin
 // ---- the wallet page: one address, every collection
 
 /** What one token of each collection is called, for the counts in the sidebar. */
-const UNIT: Record<string, [string, string]> = { knot: ["knot", "knots"], blit: ["blit", "blits"], chainrun: ["runner", "runners"], faces: ["face", "faces"] };
+const UNIT: Record<string, [string, string]> = { knot: ["knot", "knots"], blit: ["blit", "blits"], chainrun: ["runner", "runners"], faces: ["face", "faces"], one: ["coin", "coins"] };
 function unit(c: Collection, n: number): string {
   const u = UNIT[c.slug] ?? ["token", "tokens"];
   return plural(n, u[0], u[1]);
@@ -427,7 +437,7 @@ function unit(c: Collection, n: number): string {
 function walletSection(s: WalletState): string {
   const c = s.c;
   const n = s.tokens.length;
-  const head = `<div class="head"><h2 class="syne" id="w-${c.slug}">${esc(c.name)}<span>${s.ok ? `${n} ${unit(c, n)}` : s.tokens.length ? `${n} ${unit(c, n)} as of ${ago(s.fetchedAt)}` : "could not be checked"}</span></h2><a class="small" href="https://${c.host}/yours">Your ${c.kind === "rolls" ? "faces" : "days"} on ${c.host}</a></div>`;
+  const head = `<div class="head"><h2 class="syne" id="w-${c.slug}">${esc(c.name)}<span>${s.ok ? `${n} ${unit(c, n)}` : s.tokens.length ? `${n} ${unit(c, n)} as of ${ago(s.fetchedAt)}` : "could not be checked"}</span></h2><a class="small" href="https://${c.host}/yours">Your ${tokensWord(c)} on ${c.host}</a></div>`;
   if (!s.ok && !n) return `<section class="wcoll" id="${c.slug}" aria-labelledby="w-${c.slug}">${head}<p class="small">${esc(c.name)} could not be checked. <a href="">Try again</a>, or <a href="https://${c.host}/yours">look there</a>.</p></section>`;
   const note = !s.ok ? `<p class="small">${esc(c.name)} did not answer just now. This is its last answer, from ${ago(s.fetchedAt)}. <a href="">Try again</a>.</p>` : "";
   if (!n) return `<section class="wcoll" id="${c.slug}" aria-labelledby="w-${c.slug}">${head}${note}<p class="small">Nothing here yet.</p></section>`;
@@ -436,7 +446,7 @@ function walletSection(s: WalletState): string {
     const png = t.image.replace(/\.svg(\?.*)?$/, "-1024.png$1");
     return `<div class="tile"><a href="${esc(t.url)}"><img src="${esc(t.image)}" alt="${esc(t.label)}" loading="lazy"${c.pixel ? ' class="pixel"' : ""}></a><div class="cap"><a href="${esc(t.url)}">${esc(t.caption)}</a></div><div class="get"><a href="${esc(t.image)}" download="${c.slug}-${t.unit}-${t.id}.svg" data-dl="svg" ${d} aria-label="Download SVG of ${esc(t.label)}">SVG</a><a href="${esc(png)}" download="${c.slug}-${t.unit}-${t.id}-1024.png" data-dl="png" ${d} aria-label="Download PNG of ${esc(t.label)}">PNG</a><a href="${esc(png)}" data-dl="jpeg" ${d} hidden data-js aria-label="Download JPEG of ${esc(t.label)}">JPEG</a></div></div>`;
   });
-  const facts = s.facts.length ? `<ul class="facts" aria-label="About these ${c.kind === "rolls" ? "faces" : "days"}">${s.facts.map((f) => `<li><span class="fig syne">${esc(f.figure)}</span><span class="lab">${esc(f.label)}</span></li>`).join("")}</ul>` : "";
+  const facts = s.facts.length ? `<ul class="facts" aria-label="About these ${tokensWord(c)}">${s.facts.map((f) => `<li><span class="fig syne">${esc(f.figure)}</span><span class="lab">${esc(f.label)}</span></li>`).join("")}</ul>` : "";
   return `<section class="wcoll" id="${c.slug}" aria-labelledby="w-${c.slug}">${head}${note}${facts}<div class="strip">${tiles.join("")}</div></section>`;
 }
 
@@ -476,7 +486,7 @@ ${wallet && total ? `<hr>\n${sizes}` : ""}
 <nav class="small" style="display:flex;flex-direction:column;gap:6px" aria-label="Collections">${states.map((s) => `<a href="${wallet ? `#${s.c.slug}` : `https://${s.c.host}/yours`}">${esc(s.c.name)}</a>`).join("")}<a href="/">All collections</a></nav>
 </div></aside>
 <main id="main">
-${wallet ? wallet.states.map(walletSection).join("\n") : states.map((s) => `<section class="wcoll" id="${s.c.slug}"><div class="head"><h2 class="syne">${esc(s.c.name)}</h2><a class="small" href="https://${s.c.host}/yours">Your ${s.c.kind === "rolls" ? "faces" : "days"} on ${s.c.host}</a></div></section>`).join("\n")}
+${wallet ? wallet.states.map(walletSection).join("\n") : states.map((s) => `<section class="wcoll" id="${s.c.slug}"><div class="head"><h2 class="syne">${esc(s.c.name)}</h2><a class="small" href="https://${s.c.host}/yours">Your ${tokensWord(s.c)} on ${s.c.host}</a></div></section>`).join("\n")}
 <footer><span>This is not an investment and never will be. Images are CC0.${wallet?.address ? ` <a href="/api/wallet/${wallet.address}.json">JSON</a>` : ""}</span><nav aria-label="Footer">${COLLECTIONS.map((c) => `<a href="https://${c.host}">${esc(c.name)}</a>`).join("")}<a href="/">All collections</a></nav></footer>
 </main>
 </div>

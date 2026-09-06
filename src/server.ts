@@ -81,7 +81,7 @@ async function route(url: URL): Promise<Response> {
         name: s.c.name,
         url: `https://${s.c.host}/`,
         kind: s.c.kind,
-        api: s.c.kind === "rolls" ? `https://${s.c.host}/api/state` : `https://${s.c.host}/api/summary`,
+        api: s.c.kind === "daily" ? `https://${s.c.host}/api/summary` : `https://${s.c.host}/api/state`,
         holder: `https://${s.c.host}/api/holder/ADDRESS`,
         contract: s.c.contract,
         chainId: 8453,

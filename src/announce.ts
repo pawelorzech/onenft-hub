@@ -59,7 +59,10 @@ export const TAGS: Record<string, string[]> = {
 const HOW: Record<Collection["kind"], string> = {
   daily: "Free to claim, gas only. One a day, first wallet wins.",
   rolls: "No fee unless you pin, gas only. Rare and legendary come from luck alone.",
+  coins: "The mint price is the backing, nothing on top. Burn to redeem.",
 };
+/** The collections the announcer speaks about: a preview site is shown on the hub but never announced. */
+export const ANNOUNCED: Collection[] = COLLECTIONS.filter((c) => !c.preview);
 
 export const X_LIMIT = 280;
 /** Length as X counts it: every link is 23, the rest by code point. */
@@ -188,8 +191,8 @@ export function promoText(c: Collection, j: unknown, now = Date.now()): string |
 /** Which collection gets a slot: they take turns, and one day's slots cover different collections. */
 export function promoPick(date: string, slot = 0): Collection {
   const days = Math.floor(Date.parse(`${date}T00:00:00Z`) / 86400000);
-  const n = COLLECTIONS.length;
-  return COLLECTIONS[(((days * 3 + slot) % n) + n) % n]!;
+  const n = ANNOUNCED.length;
+  return ANNOUNCED[(((days * 3 + slot) % n) + n) % n]!;
 }
 
 async function getJson(url: string): Promise<unknown> {
@@ -200,10 +203,10 @@ async function getJson(url: string): Promise<unknown> {
 
 /** Every token the collections show right now. A collection that fails is skipped this round, not the others. */
 export async function currentMints(): Promise<Mint[]> {
-  const all = await Promise.all(COLLECTIONS.map(async (c) => {
+  const all = await Promise.all(ANNOUNCED.map(async (c) => {
     try {
       const base = baseOf(c);
-      if (c.kind === "rolls") return rollMints(c, await getJson(`${base}/api/state`));
+      if (c.kind !== "daily") return rollMints(c, await getJson(`${base}/api/state`));
       const m = dailyMint(c, await getJson(`${base}/api/today`));
       return m ? [m] : [];
     } catch (e) {
@@ -227,7 +230,7 @@ export async function promoMint(hoursUtc: number[], now = Date.now()): Promise<M
   if (slot < 0) return null;
   const c = promoPick(date, slot);
   try {
-    const j = await getJson(`${baseOf(c)}/api/${c.kind === "rolls" ? "state" : "today"}`);
+    const j = await getJson(`${baseOf(c)}/api/${c.kind === "daily" ? "today" : "state"}`);
     const p = promoBrief(c, j, slot, now);
     return p ? { slug: c.slug, key: `promo:${date}:${slot}`, id: 0, text: p.text, image: `https://${c.host}/today.png`, brief: p.brief } : null;
   } catch (e) {

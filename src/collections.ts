@@ -12,8 +12,10 @@
  */
 export type Collection = {
   slug: string;
-  /** "daily": one token a day, read from /api/today and /api/days. "rolls": one roll per wallet a day, read from /api/state. */
-  kind: "daily" | "rolls";
+  /** "daily": one token a day, read from /api/today and /api/days. "rolls": one roll per wallet a day, read from /api/state. "coins": ONE, minted any time, read from /api/state the same way. */
+  kind: "daily" | "rolls" | "coins";
+  /** True while the site runs without a contract; the hub shows it but never announces it. */
+  preview?: boolean;
   /** Short name shown on the page. */
   name: string;
   /** Host of the collection's own site. Its /api/today and /api/days feed this page. */
@@ -48,6 +50,19 @@ export const COLLECTIONS: Collection[] = [
     contract: "0x7C745F4eA367A7A3CD596219A4E428F2eA9A8C4c",
     // The second Faces contract (2026-09-06); OpenSea has not named its collection yet, so the link goes to the contract's assets.
     opensea: "https://opensea.io/assets/base/0x7C745F4eA367A7A3CD596219A4E428F2eA9A8C4c/1",
+  },
+  {
+    slug: "one",
+    kind: "coins",
+    name: "ONE",
+    host: "one.onenft.click",
+    line: "Pixel coins backed by USDC, 10,000 a series.",
+    source: "Every coin holds 10, 25 or 50 USDC in a vault that earns; burn it and the backing plus its yield comes back. Art and money never correlate: 50 Master Coins a series come from an urn nobody can steer, and a 10 USDC coin can be one of them. Preview until the contract is live.",
+    pixel: true,
+    repo: "https://github.com/pawelorzech/onenft-one",
+    contract: "",
+    opensea: "",
+    preview: true,
   },
   {
     slug: "knot",

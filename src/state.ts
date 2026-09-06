@@ -151,14 +151,14 @@ export function tallyFrom(j: unknown): Tally | null {
 }
 
 /** The newest face as a "today", so the block renders like the others. */
-export function newestOf(j: unknown, host: string): Today | null {
+export function newestOf(j: unknown, host: string, unit = "face"): Today | null {
   if (!isObj(j) || !Array.isArray(j.recent)) return null;
   const f = j.recent[0];
   if (!isObj(f)) return null;
   const id = count(f.id);
   if (id === null) return null;
   const roll = isObj(f.roll) ? f.roll : null;
-  return { day: id, date: "", state: roll?.treasury === true || f.treasury === true ? "author" : "taken", ownerName: ensName(f.ownerName), owner: address(f.owner), image: ownUrl(f.image, host) ?? `https://${host}/face/${id}.svg`, url: ownUrl(f.url, host) ?? `https://${host}/face/${id}`, bg: null, fg: null };
+  return { day: id, date: "", state: roll?.treasury === true || f.treasury === true ? "author" : "taken", ownerName: ensName(f.ownerName), owner: address(f.owner), image: ownUrl(f.image, host) ?? `https://${host}/${unit}/${id}.svg`, url: ownUrl(f.url, host) ?? `https://${host}/${unit}/${id}`, bg: null, fg: null };
 }
 export function rollsOf(j: unknown): Rolls | null {
   if (!isObj(j)) return null;
@@ -176,9 +176,9 @@ type Loaded = Omit<CollectionState, "status" | "c">;
  */
 async function load(c: Collection): Promise<Loaded> {
   const base = baseOf(c);
-  if (c.kind === "rolls") {
+  if (c.kind === "rolls" || c.kind === "coins") {
     const j = await getJson(`${base}/api/state`);
-    return { today: newestOf(j, c.host), tally: null, rolls: rollsOf(j), upstream: upstreamOf(j), fetchedAt: Date.now() };
+    return { today: newestOf(j, c.host, c.kind === "coins" ? "coin" : "face"), tally: null, rolls: rollsOf(j), upstream: upstreamOf(j), fetchedAt: Date.now() };
   }
   try {
     const s = await getJson(`${base}/api/summary`);
@@ -222,7 +222,7 @@ export async function allStates(): Promise<CollectionState[]> {
 // ---- one wallet across every collection
 
 /** One token as the wallet page shows it, whatever the collection calls it. */
-export type WalletToken = { id: number; unit: "day" | "face"; label: string; image: string; url: string; caption: string; bg: string | null };
+export type WalletToken = { id: number; unit: "day" | "face" | "coin"; label: string; image: string; url: string; caption: string; bg: string | null };
 /** One fact a collection states about the wallet: a figure and a line under it. Counts and ids only, nothing worth anything. */
 export type WalletFact = { figure: string; label: string };
 export type WalletState = { c: Collection; ok: boolean; tokens: WalletToken[]; facts: WalletFact[]; fetchedAt: number; error: string | null };
@@ -231,19 +231,19 @@ export type Wallet = { address: string | null; name: string | null; states: Wall
 /** Normalize a collection's /api/holder answer. Daily collections list `days` with a `day`; rolls list `faces` with an `id`. */
 export function tokensOf(c: Collection, j: unknown): WalletToken[] {
   if (!isObj(j)) return [];
-  const list = c.kind === "rolls" ? j.faces : j.days;
+  const list = c.kind === "rolls" ? j.faces : c.kind === "coins" ? j.coins : j.days;
   if (!Array.isArray(list)) return [];
-  const unit = c.kind === "rolls" ? "face" : "day";
+  const unit = c.kind === "rolls" ? "face" : c.kind === "coins" ? "coin" : "day";
   const out: WalletToken[] = [];
   for (const t of list) {
     if (!isObj(t)) continue;
-    const id = count(c.kind === "rolls" ? t.id : t.day);
+    const id = count(c.kind === "daily" ? t.day : t.id);
     if (id === null) continue;
     const palette = isObj(t.traits) && typeof t.traits.palette === "string" ? t.traits.palette.slice(0, 40) : null;
     out.push({
       id,
       unit,
-      label: c.kind === "rolls" ? `Face #${id}` : `Day ${id}`,
+      label: c.kind === "rolls" ? `Face #${id}` : c.kind === "coins" ? `Coin #${id}` : `Day ${id}`,
       image: ownUrl(t.image, c.host) ?? `https://${c.host}/${unit}/${id}.svg`,
       url: ownUrl(t.url, c.host) ?? `https://${c.host}/${unit}/${id}`,
       caption: palette ? `${unit} ${id}, ${palette}` : `${unit} ${id}`,

@@ -116,7 +116,7 @@ test("old knot paths redirect to knot.onenft.click, own paths do not", async () 
   expect(w.headers.get("location")).toBe("https://onenft.click/");
   expect(OWN.has("/")).toBe(true);
   const h = await handle(new Request("https://onenft.click/health"));
-  expect(await h.text()).toStartWith("ok, 4 collections");
+  expect(await h.text()).toStartWith("ok, 5 collections");
   expect(h.headers.get("x-content-type-options")).toBe("nosniff");
 });
 
@@ -130,6 +130,7 @@ function wallet(): Wallet {
     fetchedAt: 1,
     states: [
       ok(by("faces"), tokensOf(by("faces"), { faces: [{ id: 12, image: "https://faces.onenft.click/face/12.svg", url: "https://faces.onenft.click/face/12" }] })),
+      ok(by("one"), tokensOf(by("one"), { coins: [] })),
       ok(by("knot"), tokensOf(by("knot"), { days: [{ day: 1, image: "https://knot.onenft.click/day/1.svg", url: "https://knot.onenft.click/day/1", traits: { palette: "ultramarine" }, palette: { bg: "#0e1430" } }, { day: 3, image: "https://knot.onenft.click/day/3.svg", url: "https://knot.onenft.click/day/3", traits: { palette: "pine" }, palette: { bg: "#0c1a1a" } }] }), factsOf({ facts: [{ figure: "Day 1", label: "the first knot", text: "Holds day 1." }, { figure: "<b>", label: "x".repeat(300) }, { figure: 3 }] })),
       ok(by("blit"), []),
       { c: by("chainrun"), ok: false, tokens: [], facts: [], fetchedAt: 0, error: "timeout" },
@@ -140,7 +141,7 @@ function wallet(): Wallet {
 test("tokens normalize daily days and rolled faces the same way, and drop foreign URLs", () => {
   const w = wallet();
   expect(w.states[0].tokens[0]).toMatchObject({ id: 12, unit: "face", label: "Face #12", caption: "face 12", bg: null });
-  expect(w.states[1].tokens[1]).toMatchObject({ id: 3, unit: "day", label: "Day 3", caption: "day 3, pine", bg: "#0c1a1a" });
+  expect(w.states[2].tokens[1]).toMatchObject({ id: 3, unit: "day", label: "Day 3", caption: "day 3, pine", bg: "#0c1a1a" });
   const by = (slug: string) => COLLECTIONS.find((c) => c.slug === slug)!;
   const t = tokensOf(by("knot"), { days: [{ day: 9, image: "javascript:alert(1)", url: "https://evil.example/" }] })[0];
   expect(t.image).toBe("https://knot.onenft.click/day/9.svg");
@@ -148,12 +149,12 @@ test("tokens normalize daily days and rolled faces the same way, and drop foreig
   expect(tokensOf(by("knot"), { days: [{ day: "x" }, null, 5] })).toEqual([]);
 });
 
-test("wallet page: Faces first, one section per collection, three chips per token with faces-face-N names, a failed site says found N in 3 of 4", () => {
+test("wallet page: Faces first, one section per collection, three chips per token with faces-face-N names, a failed site says found N in 4 of 5", () => {
   const h = walletPage(states(), wallet(), A);
   expect(h.indexOf('id="faces"')).toBeLessThan(h.indexOf('id="knot"'));
   expect(h).toContain('<span class="wname" style="font-size:26px">pawelorzech<wbr>.eth</span>');
   expect(h).toContain(">3</div>");
-  expect(h).toContain("Found 3 tokens in 3 of 4 collections. Chain Run could not be checked.");
+  expect(h).toContain("Found 3 tokens in 4 of 5 collections. Chain Run could not be checked.");
   expect((h.match(/data-dl="png"/g) ?? []).length).toBe(3);
   expect(h).toContain('download="faces-face-12.svg"');
   expect(h).toContain('download="faces-face-12-1024.png"');
@@ -232,7 +233,7 @@ test("the Faces facts the hub states match the Faces site's own spec (skipped wh
 
 test("facts from a collection are tiles in its section; malformed ones are clipped or dropped", () => {
   const w = wallet();
-  expect(w.states[1].facts).toEqual([{ figure: "Day 1", label: "the first knot" }, { figure: "<b>", label: "x".repeat(160) }]);
+  expect(w.states[2].facts).toEqual([{ figure: "Day 1", label: "the first knot" }, { figure: "<b>", label: "x".repeat(160) }]);
   const h = walletPage([], w, "pawelorzech.eth");
   expect(h).toContain('<span class="fig syne">Day 1</span><span class="lab">the first knot</span>');
   expect(h).toContain('<span class="fig syne">&lt;b&gt;</span>');
