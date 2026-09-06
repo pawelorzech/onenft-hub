@@ -57,12 +57,12 @@ export const COLLECTIONS: Collection[] = [
     name: "ONE",
     host: "one.onenft.click",
     line: "Pixel coins backed by USDC, 10,000 a series.",
-    source: "Every coin holds 10, 25 or 50 USDC in a vault that earns; burn it and the backing plus its yield comes back. Art and money never correlate: 50 Master Coins a series come from an urn nobody can steer, and a 10 USDC coin can be one of them. Preview until the contract is live.",
+    source: "Every coin holds 10, 25 or 50 USDC in a vault that earns; burn it and the backing plus its yield comes back. Art and money never correlate: 50 Master Coins a series come from an urn nobody can steer, and a 10 USDC coin can be one of them.",
     pixel: true,
     repo: "https://github.com/pawelorzech/onenft-one",
-    contract: "",
-    opensea: "",
-    preview: true,
+    contract: "0xF597D7bD4467A501a7634dD53Be63E1c7261bcdB",
+    // No OpenSea collection slug yet; the contract's first asset page lists the collection once it exists.
+    opensea: "https://opensea.io/assets/base/0xF597D7bD4467A501a7634dD53Be63E1c7261bcdB/1",
   },
   {
     slug: "knot",
