@@ -39,7 +39,7 @@ export function accept(text: string, b: Brief): boolean {
 
 export type LlmStatus = { model: string | null; asked: number; used: number; rejected: number; failed: number; lastError: string | null };
 const status: LlmStatus = { model: null, asked: 0, used: 0, rejected: 0, failed: 0, lastError: null };
-export const llmStatus = (): LlmStatus => ({ ...status });
+export const llmStatus = (env: Record<string, string | undefined> = process.env): LlmStatus => ({ ...status, model: status.model ?? (env.OPENROUTER_API_KEY ? env.LLM_MODEL || DEFAULT_MODEL : null) });
 
 /** Why an answer was not accepted, for the retry note and the log. */
 export function whyNot(text: string, b: Brief): string | null {
