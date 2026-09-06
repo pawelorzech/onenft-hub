@@ -53,3 +53,12 @@ test("keys come only as a full set", () => {
   expect(keysFromEnv({ X_API_KEY: "a" })).toBeNull();
   expect(keysFromEnv({ X_API_KEY: "a", X_API_SECRET: "b", X_ACCESS_TOKEN: "c", X_ACCESS_SECRET: "d" })).toEqual({ apiKey: "a", apiSecret: "b", token: "c", tokenSecret: "d" });
 });
+
+test("auth comes from the env: OAuth 1.0a first, else OAuth 2.0, else none", () => {
+  const { authFromEnv } = require("./announce.ts");
+  expect(authFromEnv({})).toBeNull();
+  expect(authFromEnv({ X_API_KEY: "a", X_API_SECRET: "b", X_ACCESS_TOKEN: "c", X_ACCESS_SECRET: "d" })!.kind).toBe("oauth1");
+  const o2 = authFromEnv({ X_CLIENT_ID: "a", X_CLIENT_SECRET: "b", X_OAUTH2_ACCESS_TOKEN: "c", X_OAUTH2_REFRESH_TOKEN: "d" })!;
+  expect(o2.kind).toBe("oauth2");
+  expect(o2.media).toBe(false);
+});

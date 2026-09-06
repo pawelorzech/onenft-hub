@@ -129,34 +129,122 @@ export function oauthHeader(k: Keys, method: string, url: string, params: Record
   return `OAuth ${Object.keys(head).sort().map((key) => `${enc(key)}="${enc(head[key]!)}"`).join(", ")}`;
 }
 
-// ---- X
+// ---- X: two ways in
+//
+// OAuth 1.0a (X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET): a user
+// token that never expires and may upload media. OAuth 2.0 (X_CLIENT_ID,
+// X_CLIENT_SECRET, X_OAUTH2_ACCESS_TOKEN, X_OAUTH2_REFRESH_TOKEN): the access
+// token lives two hours and the refresh token is single use, so every refresh
+// is written to X_TOKEN_FILE and the file wins over the env on the next boot.
+// Media upload needs the media.write scope; a token without it posts text only.
 
 const MEDIA_URL = "https://api.x.com/2/media/upload";
 const TWEETS_URL = "https://api.x.com/2/tweets";
+const OAUTH2_TOKEN_URL = "https://api.x.com/2/oauth2/token";
 
-async function uploadPng(k: Keys, png: Uint8Array): Promise<string> {
+export type Auth = {
+  kind: "oauth1" | "oauth2";
+  /** The Authorization header for one request. */
+  header(method: string, url: string): Promise<string>;
+  /** After a 401: get a fresh token. False when there is nothing to refresh. */
+  refresh(): Promise<boolean>;
+  /** Whether media upload is worth trying. */
+  media: boolean;
+};
+
+export function oauth1Auth(k: Keys): Auth {
+  return { kind: "oauth1", media: true, header: async (m, u) => oauthHeader(k, m, u), refresh: async () => false };
+}
+
+type Oauth2State = { access: string; refresh: string; expiresAt: number };
+
+/**
+ * OAuth 2.0 user context with refresh. The state is read from the file when
+ * it exists, else from the env; a token with no known expiry is refreshed
+ * before its first use. Every refresh rotates the refresh token, so the file
+ * is written at once; losing it means a new authorization by the account.
+ */
+export function oauth2Auth(clientId: string, clientSecret: string, seed: { access: string; refresh: string }, file: string | undefined, media = false): Auth {
+  let state: Oauth2State | null = null;
+  let loaded = false;
+  async function load(): Promise<Oauth2State> {
+    if (state) return state;
+    if (file && !loaded) {
+      loaded = true;
+      try {
+        const j = (await Bun.file(file).json()) as Partial<Oauth2State>;
+        if (typeof j.access === "string" && typeof j.refresh === "string") state = { access: j.access, refresh: j.refresh, expiresAt: Number(j.expiresAt) || 0 };
+      } catch {}
+    }
+    if (!state) state = { access: seed.access, refresh: seed.refresh, expiresAt: 0 };
+    return state;
+  }
+  async function refresh(): Promise<boolean> {
+    const s = await load();
+    const res = await fetch(OAUTH2_TOKEN_URL, {
+      method: "POST",
+      headers: { authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: s.refresh, client_id: clientId }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    const j = (await res.json().catch(() => null)) as { access_token?: string; refresh_token?: string; expires_in?: number; error?: string; error_description?: string } | null;
+    if (!res.ok || !j?.access_token) throw new Error(`oauth2 refresh ${res.status}: ${j?.error ?? ""} ${j?.error_description ?? ""}`.trim());
+    state = { access: j.access_token, refresh: j.refresh_token ?? s.refresh, expiresAt: Date.now() + (Number(j.expires_in) || 7200) * 1000 };
+    if (file) {
+      try { await Bun.write(file, JSON.stringify(state)); } catch (e) { console.warn(`announce: token file not written: ${String((e as Error)?.message ?? e)}`); }
+    }
+    console.log(`announce: oauth2 token refreshed, good for ${Math.round((state.expiresAt - Date.now()) / 60000)} min`);
+    return true;
+  }
+  return {
+    kind: "oauth2",
+    media,
+    async header() {
+      const s = await load();
+      // Unknown expiry, or less than five minutes left: refresh first.
+      if (s.expiresAt - Date.now() < 5 * 60_000) await refresh();
+      return `Bearer ${state!.access}`;
+    },
+    refresh,
+  };
+}
+
+/** The auth the env describes: OAuth 1.0a when its four keys are complete, else OAuth 2.0 when its four are, else none. */
+export function authFromEnv(env: Record<string, string | undefined> = process.env): Auth | null {
+  const k = keysFromEnv(env);
+  if (k) return oauth1Auth(k);
+  const { X_CLIENT_ID: id, X_CLIENT_SECRET: secret, X_OAUTH2_ACCESS_TOKEN: access, X_OAUTH2_REFRESH_TOKEN: refresh } = env;
+  if (id && secret && access && refresh) return oauth2Auth(id, secret, { access, refresh }, env.X_TOKEN_FILE, env.X_MEDIA === "1");
+  return null;
+}
+
+async function uploadPng(auth: Auth, png: Uint8Array): Promise<string> {
   const form = new FormData();
   form.set("media", new Blob([png as BlobPart], { type: "image/png" }), "token.png");
   form.set("media_category", "tweet_image");
-  const res = await fetch(MEDIA_URL, { method: "POST", headers: { authorization: oauthHeader(k, "POST", MEDIA_URL) }, body: form, signal: AbortSignal.timeout(30_000) });
+  const res = await fetch(MEDIA_URL, { method: "POST", headers: { authorization: await auth.header("POST", MEDIA_URL) }, body: form, signal: AbortSignal.timeout(30_000) });
   const j = (await res.json().catch(() => null)) as { data?: { id?: string }; id?: string; media_id_string?: string } | null;
   const id = j?.data?.id ?? j?.id ?? j?.media_id_string;
   if (!res.ok || !id) throw new Error(`media upload ${res.status}: ${JSON.stringify(j).slice(0, 300)}`);
   return id;
 }
 
-/** One post with one picture. Returns the post id. When the PNG cannot be fetched the post goes out without it. */
-export async function post(k: Keys, m: Mint): Promise<string> {
+/** One post, with the picture when the auth may upload one. Returns the post id. A 401 gets one refresh and one retry. */
+export async function post(auth: Auth, m: Mint): Promise<string> {
   let mediaId: string | null = null;
-  try {
-    const img = await fetch(m.image, { signal: AbortSignal.timeout(15_000) });
-    if (img.ok) mediaId = await uploadPng(k, new Uint8Array(await img.arrayBuffer()));
-    else console.warn(`announce: ${m.key} image ${img.status}, posting text only`);
-  } catch (e) {
-    console.warn(`announce: ${m.key} image failed, posting text only: ${String((e as Error)?.message ?? e)}`);
+  if (auth.media) {
+    try {
+      const img = await fetch(m.image, { signal: AbortSignal.timeout(15_000) });
+      if (img.ok) mediaId = await uploadPng(auth, new Uint8Array(await img.arrayBuffer()));
+      else console.warn(`announce: ${m.key} image ${img.status}, posting text only`);
+    } catch (e) {
+      console.warn(`announce: ${m.key} image failed, posting text only: ${String((e as Error)?.message ?? e)}`);
+    }
   }
   const body = JSON.stringify(mediaId ? { text: m.text, media: { media_ids: [mediaId] } } : { text: m.text });
-  const res = await fetch(TWEETS_URL, { method: "POST", headers: { authorization: oauthHeader(k, "POST", TWEETS_URL), "content-type": "application/json" }, body, signal: AbortSignal.timeout(30_000) });
+  const send = async () => fetch(TWEETS_URL, { method: "POST", headers: { authorization: await auth.header("POST", TWEETS_URL), "content-type": "application/json" }, body, signal: AbortSignal.timeout(30_000) });
+  let res = await send();
+  if (res.status === 401 && (await auth.refresh().catch(() => false))) res = await send();
   const j = (await res.json().catch(() => null)) as { data?: { id?: string } } | null;
   if (!res.ok || !j?.data?.id) throw new Error(`post ${res.status}: ${JSON.stringify(j).slice(0, 300)}`);
   return j.data.id;
@@ -164,7 +252,7 @@ export async function post(k: Keys, m: Mint): Promise<string> {
 
 // ---- the loop
 
-export type AnnouncerStatus = { enabled: boolean; dryRun: boolean; seeded: boolean; seen: number; posted: number; failed: number; lastPostAt: string | null; lastError: string | null };
+export type AnnouncerStatus = { enabled: boolean; auth: "oauth1" | "oauth2" | null; dryRun: boolean; seeded: boolean; seen: number; posted: number; failed: number; lastPostAt: string | null; lastError: string | null };
 
 /** Which of `now` are new, given what was seen. Pure, so the test can drive it. */
 export function fresh(now: Mint[], seen: Set<string>): Mint[] {
@@ -172,7 +260,7 @@ export function fresh(now: Mint[], seen: Set<string>): Mint[] {
 }
 
 const seen = new Set<string>();
-const status: AnnouncerStatus = { enabled: false, dryRun: false, seeded: false, seen: 0, posted: 0, failed: 0, lastPostAt: null, lastError: null };
+const status: AnnouncerStatus = { enabled: false, auth: null, dryRun: false, seeded: false, seen: 0, posted: 0, failed: 0, lastPostAt: null, lastError: null };
 export const announcerStatus = (): AnnouncerStatus => ({ ...status, seen: seen.size });
 
 async function loadSeen(file: string): Promise<void> {
@@ -187,7 +275,7 @@ async function saveSeen(file: string | undefined): Promise<void> {
 }
 
 /** One round: read, diff, post. Exported so a test can run it without the timer. */
-export async function round(k: Keys | null, file?: string): Promise<Mint[]> {
+export async function round(auth: Auth | null, file?: string): Promise<Mint[]> {
   const now = await currentMints();
   if (!status.seeded) {
     for (const m of now) seen.add(m.key);
@@ -199,8 +287,8 @@ export async function round(k: Keys | null, file?: string): Promise<Mint[]> {
   const out: Mint[] = [];
   for (const m of fresh(now, seen)) {
     try {
-      if (status.dryRun || !k) console.log(`announce (dry run): ${m.text.replace(/\n/g, " ")} [${m.image}]`);
-      else console.log(`announce: ${m.key} posted as ${await post(k, m)}`);
+      if (status.dryRun || !auth) console.log(`announce (dry run): ${m.text.replace(/\n/g, " ")} [${m.image}]`);
+      else console.log(`announce: ${m.key} posted as ${await post(auth, m)}`);
       seen.add(m.key);
       status.posted++;
       status.lastPostAt = new Date().toISOString();
@@ -216,25 +304,26 @@ export async function round(k: Keys | null, file?: string): Promise<Mint[]> {
   return out;
 }
 
-/** Starts the timer when keys are present or dry run is on. Returns whether it started. */
+/** Starts the timer when an auth is present or dry run is on. Returns whether it started. */
 export function startAnnouncer(env: Record<string, string | undefined> = process.env): boolean {
-  const k = keysFromEnv(env);
+  const auth = authFromEnv(env);
   status.dryRun = env.ANNOUNCE_DRY_RUN === "1";
-  if (!k && !status.dryRun) {
+  if (!auth && !status.dryRun) {
     console.log("announce: off, no X keys in the env");
     return false;
   }
   status.enabled = true;
+  status.auth = auth?.kind ?? null;
   const every = Math.max(15_000, Number(env.ANNOUNCE_EVERY_MS ?? 60_000));
   const file = env.ANNOUNCE_STATE_FILE;
   const tick = async () => {
     if (file && !status.seeded && seen.size === 0) await loadSeen(file);
     // A saved seen set means the boot already happened once; only post from then on.
     if (file && seen.size > 0) status.seeded = true;
-    await round(k, file).catch((e) => console.warn(`announce: round failed: ${String((e as Error)?.message ?? e)}`));
+    await round(auth, file).catch((e) => console.warn(`announce: round failed: ${String((e as Error)?.message ?? e)}`));
   };
   void tick();
   setInterval(() => void tick(), every);
-  console.log(`announce: on${status.dryRun ? " (dry run)" : ""}, every ${every / 1000} s`);
+  console.log(`announce: on${status.dryRun ? " (dry run)" : ""} with ${auth?.kind ?? "no auth"}, every ${every / 1000} s`);
   return true;
 }
