@@ -128,9 +128,9 @@ footer nav{display:flex;gap:6px 20px;flex-wrap:wrap}
 .wcoll .head{display:flex;justify-content:space-between;align-items:baseline;gap:20px;flex-wrap:wrap}
 .wcoll h2{font-weight:800;font-size:34px;line-height:.95;letter-spacing:-.03em;margin:0}
 .wcoll h2 span{font-weight:400;font-size:17px;color:var(--muted);letter-spacing:0;margin-left:12px;font-family:"Newsreader",Georgia,serif}
-.facts{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);max-width:1020px}
-.facts li{background:var(--bg);padding:18px 20px 16px;display:flex;flex-direction:column;gap:6px;min-width:0}
-.facts .fig{font-weight:800;font-size:30px;line-height:1;letter-spacing:-.03em}
+.facts{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));border-top:1px solid var(--line);border-left:1px solid var(--line);max-width:1120px}
+.facts li{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:18px 20px 16px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.facts .fig{font-weight:800;font-size:28px;line-height:1;letter-spacing:-.03em;white-space:nowrap}
 .facts .lab{font-size:15px;color:var(--muted);line-height:1.35}
 .strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px}
 .strip .tile{display:flex;flex-direction:column;gap:6px}
