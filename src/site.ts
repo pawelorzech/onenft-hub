@@ -161,7 +161,7 @@ footer nav{display:flex;gap:6px 20px;flex-wrap:wrap}
 }
 @media (max-width:900px){
  .wcoll,.counts{padding:20px}
- .page{grid-template-columns:1fr}
+ .page{grid-template-columns:minmax(0,1fr)}
  aside{border-right:0;border-bottom:1px solid var(--line);padding:18px 20px}
  aside .stick{position:static;gap:16px}
  h1{font-size:38px}
