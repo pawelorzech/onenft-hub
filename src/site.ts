@@ -128,6 +128,10 @@ footer nav{display:flex;gap:6px 20px;flex-wrap:wrap}
 .wcoll .head{display:flex;justify-content:space-between;align-items:baseline;gap:20px;flex-wrap:wrap}
 .wcoll h2{font-weight:800;font-size:34px;line-height:.95;letter-spacing:-.03em;margin:0}
 .wcoll h2 span{font-weight:400;font-size:17px;color:var(--muted);letter-spacing:0;margin-left:12px;font-family:"Newsreader",Georgia,serif}
+.facts{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);max-width:1020px}
+.facts li{background:var(--bg);padding:18px 20px 16px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.facts .fig{font-weight:800;font-size:30px;line-height:1;letter-spacing:-.03em}
+.facts .lab{font-size:15px;color:var(--muted);line-height:1.35}
 .strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px}
 .strip .tile{display:flex;flex-direction:column;gap:6px}
 .strip img{width:100%;aspect-ratio:1;display:block;box-shadow:0 0 0 1px var(--line);background:var(--soft)}
@@ -432,7 +436,8 @@ function walletSection(s: WalletState): string {
     const png = t.image.replace(/\.svg(\?.*)?$/, "-1024.png$1");
     return `<div class="tile"><a href="${esc(t.url)}"><img src="${esc(t.image)}" alt="${esc(t.label)}" loading="lazy"${c.pixel ? ' class="pixel"' : ""}></a><div class="cap"><a href="${esc(t.url)}">${esc(t.caption)}</a></div><div class="get"><a href="${esc(t.image)}" download="${c.slug}-${t.unit}-${t.id}.svg" data-dl="svg" ${d} aria-label="Download SVG of ${esc(t.label)}">SVG</a><a href="${esc(png)}" download="${c.slug}-${t.unit}-${t.id}-1024.png" data-dl="png" ${d} aria-label="Download PNG of ${esc(t.label)}">PNG</a><a href="${esc(png)}" data-dl="jpeg" ${d} hidden data-js aria-label="Download JPEG of ${esc(t.label)}">JPEG</a></div></div>`;
   });
-  return `<section class="wcoll" id="${c.slug}" aria-labelledby="w-${c.slug}">${head}${note}<div class="strip">${tiles.join("")}</div></section>`;
+  const facts = s.facts.length ? `<ul class="facts" aria-label="About these ${c.kind === "rolls" ? "faces" : "days"}">${s.facts.map((f) => `<li><span class="fig syne">${esc(f.figure)}</span><span class="lab">${esc(f.label)}</span></li>`).join("")}</ul>` : "";
+  return `<section class="wcoll" id="${c.slug}" aria-labelledby="w-${c.slug}">${head}${note}${facts}<div class="strip">${tiles.join("")}</div></section>`;
 }
 
 function whoBlock(): string {

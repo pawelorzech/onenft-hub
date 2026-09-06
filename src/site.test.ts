@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
 import { homePage, walletPage, goTarget, pageColors, FALLBACK, mix, cssVars, contrast } from "./site.ts";
-import { colorsOf, todayOf, tallyOf, tallyFrom, newestOf, rollsOf, tokensOf, count, color, ownUrl, ensName, upstreamOf, type CollectionState, type Wallet, type WalletState } from "./state.ts";
+import { colorsOf, todayOf, tallyOf, tallyFrom, newestOf, rollsOf, tokensOf, factsOf, count, color, ownUrl, ensName, upstreamOf, type CollectionState, type Wallet, type WalletState } from "./state.ts";
 import { COLLECTIONS, FACES_MAX, FACES_MAX_PINS, FACES_FIRST_PIN_ETH, FACES_ALL_PINS_ETH } from "./collections.ts";
 import { handle, OWN } from "./server.ts";
 import type { SwrStatus } from "./swr.ts";
@@ -123,16 +123,16 @@ test("old knot paths redirect to knot.onenft.click, own paths do not", async () 
 const A = "0x84Cf6667FdE676a5950730720b67d62B9AB476Df";
 function wallet(): Wallet {
   const by = (slug: string) => COLLECTIONS.find((c) => c.slug === slug)!;
-  const ok = (c: WalletState["c"], tokens: WalletState["tokens"]): WalletState => ({ c, ok: true, tokens, fetchedAt: Date.now(), error: null });
+  const ok = (c: WalletState["c"], tokens: WalletState["tokens"], facts: WalletState["facts"] = []): WalletState => ({ c, ok: true, tokens, facts, fetchedAt: Date.now(), error: null });
   return {
     address: A,
     name: "pawelorzech.eth",
     fetchedAt: 1,
     states: [
       ok(by("faces"), tokensOf(by("faces"), { faces: [{ id: 12, image: "https://faces.onenft.click/face/12.svg", url: "https://faces.onenft.click/face/12" }] })),
-      ok(by("knot"), tokensOf(by("knot"), { days: [{ day: 1, image: "https://knot.onenft.click/day/1.svg", url: "https://knot.onenft.click/day/1", traits: { palette: "ultramarine" }, palette: { bg: "#0e1430" } }, { day: 3, image: "https://knot.onenft.click/day/3.svg", url: "https://knot.onenft.click/day/3", traits: { palette: "pine" }, palette: { bg: "#0c1a1a" } }] })),
+      ok(by("knot"), tokensOf(by("knot"), { days: [{ day: 1, image: "https://knot.onenft.click/day/1.svg", url: "https://knot.onenft.click/day/1", traits: { palette: "ultramarine" }, palette: { bg: "#0e1430" } }, { day: 3, image: "https://knot.onenft.click/day/3.svg", url: "https://knot.onenft.click/day/3", traits: { palette: "pine" }, palette: { bg: "#0c1a1a" } }] }), factsOf({ facts: [{ figure: "Day 1", label: "the first knot", text: "Holds day 1." }, { figure: "<b>", label: "x".repeat(300) }, { figure: 3 }] })),
       ok(by("blit"), []),
-      { c: by("chainrun"), ok: false, tokens: [], fetchedAt: 0, error: "timeout" },
+      { c: by("chainrun"), ok: false, tokens: [], facts: [], fetchedAt: 0, error: "timeout" },
     ],
   };
 }
@@ -228,4 +228,13 @@ test("the Faces facts the hub states match the Faces site's own spec (skipped wh
   expect(spec.maxPins).toBe(FACES_MAX_PINS);
   expect(spec.pinPricesEth[1]).toBe(FACES_FIRST_PIN_ETH);
   expect(spec.pinPricesEth[FACES_MAX_PINS]).toBe(FACES_ALL_PINS_ETH);
+});
+
+test("facts from a collection are tiles in its section; malformed ones are clipped or dropped", () => {
+  const w = wallet();
+  expect(w.states[1].facts).toEqual([{ figure: "Day 1", label: "the first knot" }, { figure: "<b>", label: "x".repeat(160) }]);
+  const h = walletPage([], w, "pawelorzech.eth");
+  expect(h).toContain('<span class="fig syne">Day 1</span><span class="lab">the first knot</span>');
+  expect(h).toContain('<span class="fig syne">&lt;b&gt;</span>');
+  expect((h.match(/class="facts"/g) ?? []).length).toBe(1);
 });

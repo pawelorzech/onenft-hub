@@ -17,6 +17,7 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { COLLECTIONS, type Collection } from "./collections.ts";
 import { baseOf, count, address, ensName, stateWord, ownUrl } from "./state.ts";
+import { llmPost, llmStatus, type Brief } from "./llm.ts";
 
 export type Mint = {
   slug: string;
@@ -25,6 +26,8 @@ export type Mint = {
   id: number;
   text: string;
   image: string;
+  /** What the language model gets when one is configured. */
+  brief: Brief;
 };
 
 type Keys = { apiKey: string; apiSecret: string; token: string; tokenSecret: string };
@@ -93,7 +96,10 @@ export function dailyMint(c: Collection, j: unknown): Mint | null {
   const first = state === "author" ? `Day ${day} of ${c.name} went to the author.` : `Day ${day} of ${c.name} is claimed by ${owner}.`;
   const what = `${c.line}${palette ? ` Today's palette: ${palette}.` : ""}`;
   const url = `https://${c.host}/day/${day}`;
-  return { slug: c.slug, key: `${c.slug}:${day}`, id: day, text: fit([first, what, "Tomorrow at 00:00 UTC a new one appears. " + HOW.daily], url, TAGS[c.slug] ?? []), image: `https://${c.host}/day/${day}-1024.png` };
+  const tags = TAGS[c.slug] ?? [];
+  const text = fit([first, what, "Tomorrow at 00:00 UTC a new one appears. " + HOW.daily], url, tags);
+  const facts = [first, c.line, c.source, palette ? `Palette of the day: ${palette}.` : "", `Day ${day} is the token id. A day nobody claims stays empty forever.`, HOW.daily, "Tomorrow at 00:00 UTC a new one appears."].filter(Boolean).join("\n");
+  return { slug: c.slug, key: `${c.slug}:${day}`, id: day, text, image: `https://${c.host}/day/${day}-1024.png`, brief: { facts, angle: "a mint just happened; say who took the day and invite the reader to come for tomorrow's", url, tags, reference: text } };
 }
 
 /** Every face in the recent list of a rolls collection, oldest first. */
@@ -109,10 +115,14 @@ export function rollMints(c: Collection, j: unknown): Mint[] {
     const owner = who(f.ownerName ?? roll.ownerName, f.owner ?? roll.owner ?? roll.roller);
     const rarity = typeof f.rarity === "string" ? f.rarity : null;
     const one = typeof f.oneOfOne === "string" && f.oneOfOne ? f.oneOfOne : null;
+    const pins = isObj(f.pins) ? Object.keys(f.pins).length : 0;
     const first = treasury ? `Face #${id} was rolled for the author.` : owner ? `Face #${id} was rolled by ${owner}.` : `Face #${id} was rolled.`;
     const detail = one ? `A one of one: ${one}. It exists once and never again.` : rarity ? `Rarity: ${rarity}.` : "";
     const url = `https://${c.host}/face/${id}`;
-    out.push({ slug: c.slug, key: `${c.slug}:${id}`, id, text: fit([first, detail, `${c.line} Pin the traits you want or leave it all to luck. ${HOW.rolls}`], url, TAGS[c.slug] ?? []), image: ownUrl(f.png, c.host) ?? `https://${c.host}/face/${id}-1024.png` });
+    const tags = TAGS[c.slug] ?? [];
+    const text = fit([first, detail, `${c.line} Pin the traits you want or leave it all to luck. ${HOW.rolls}`], url, tags);
+    const facts = [first, detail, pins ? `${pins} ${pins === 1 ? "trait was" : "traits were"} pinned by the roller, the rest came from luck.` : "No pins, luck decided every trait.", c.line, c.source, HOW.rolls].filter(Boolean).join("\n");
+    out.push({ slug: c.slug, key: `${c.slug}:${id}`, id, text, image: ownUrl(f.png, c.host) ?? `https://${c.host}/face/${id}-1024.png`, brief: { facts, angle: "a face was just rolled; say what came out and invite the reader to roll their own today", url, tags, reference: text } });
   }
   return out.sort((a, b) => a.id - b.id);
 }
@@ -120,20 +130,31 @@ export function rollMints(c: Collection, j: unknown): Mint[] {
 /** A number with thousands separators, English style. */
 const num = (n: number) => n.toLocaleString("en-US");
 
+/** The three angles of the day, by slot: morning, midday, evening. */
+export const ANGLES = [
+  "morning: what is open right now and how to take part",
+  "midday: how the thing works, one detail a curious reader would like, then the invitation",
+  "evening: last hours of the UTC day; what is still free or what is coming at midnight",
+];
+
 /**
- * The daily note about one collection: what is open right now. For a daily
- * collection, the free day and the hours left, or that today is gone and
- * tomorrow's is coming. For rolls, the count and the pool. Null when the
+ * The template and the facts for a promo about one collection. For a daily
+ * collection: the free day and the hours left, or that today is gone and
+ * tomorrow's is coming. For rolls: the count and the pool. Null when the
  * answer does not fit.
  */
-export function promoText(c: Collection, j: unknown, now = Date.now()): string | null {
+export function promoBrief(c: Collection, j: unknown, slot = 0, now = Date.now()): { text: string; brief: Brief } | null {
   if (!isObj(j)) return null;
   const tags = TAGS[c.slug] ?? [];
+  const angle = ANGLES[slot] ?? ANGLES[0]!;
   if (c.kind === "rolls") {
     const rolled = count(j.totalSupply), max = count(j.maxSupply) ?? 10000, pool = count(j.poolLeft);
     if (rolled === null) return null;
     const first = `${c.name}: ${num(rolled)} of ${num(max)} faces rolled${pool !== null ? `, ${num(pool)} one of ones still in the pool` : ""}.`;
-    return fit([first, `${c.line} Pin the traits you want or leave it all to luck. ${HOW.rolls}`], `https://${c.host}`, tags);
+    const url = `https://${c.host}`;
+    const text = fit([first, `${c.line} Pin the traits you want or leave it all to luck. ${HOW.rolls}`], url, tags);
+    const facts = [first, c.line, c.source, "Any roll may take a one of one from the pool; each exists once.", "Seven pixel layers and five colours; rarity is the rarest part.", HOW.rolls].join("\n");
+    return { text, brief: { facts, angle, url, tags, reference: text } };
   }
   const day = count(j.day);
   const state = stateWord(j.state);
@@ -142,19 +163,30 @@ export function promoText(c: Collection, j: unknown, now = Date.now()): string |
   const left = startsAt !== null ? Math.max(0, startsAt + 86400 - Math.floor(now / 1000)) : null;
   const hours = left !== null ? Math.floor(left / 3600) : null;
   const palette = isObj(j.traits) && typeof j.traits.palette === "string" ? j.traits.palette : null;
-  const url = `https://${c.host}/day/${day}`;
+  const common = [c.line, c.source, "The token id is the day number. A day nobody claims stays empty forever; the gaps are part of the work.", "The image is computed on chain from the day number alone.", HOW.daily];
   if (state === "free") {
+    const url = `https://${c.host}/day/${day}`;
     const first = `Day ${day} of ${c.name} is still free${palette ? `: ${palette}` : ""}.${hours !== null ? ` ${hours === 0 ? "Less than an hour" : `${hours} ${hours === 1 ? "hour" : "hours"}`} left, then it is gone for good.` : ""}`;
-    return fit([first, `${c.line} ${HOW.daily}`], url, tags);
+    const text = fit([first, `${c.line} ${HOW.daily}`], url, tags);
+    return { text, brief: { facts: [first, ...common].join("\n"), angle, url, tags, reference: text } };
   }
+  const url = `https://${c.host}`;
   const first = state === "author" ? `Day ${day} of ${c.name} is the author's.` : `Day ${day} of ${c.name} is taken.`;
-  return fit([first, `${c.line} Tomorrow at 00:00 UTC a new one appears. ${HOW.daily}`], `https://${c.host}`, tags);
+  const text = fit([first, `${c.line} Tomorrow at 00:00 UTC a new one appears. ${HOW.daily}`], url, tags);
+  const facts = [first, hours !== null ? `${hours} hours until the next day starts at 00:00 UTC.` : "", ...common].filter(Boolean).join("\n");
+  return { text, brief: { facts, angle, url, tags, reference: text } };
 }
 
-/** Which collection gets the daily note: they take turns by the day number. */
-export function promoPick(date: string): Collection {
+/** The template alone, for tests and for the plain path. */
+export function promoText(c: Collection, j: unknown, now = Date.now()): string | null {
+  return promoBrief(c, j, 0, now)?.text ?? null;
+}
+
+/** Which collection gets a slot: they take turns, and one day's slots cover different collections. */
+export function promoPick(date: string, slot = 0): Collection {
   const days = Math.floor(Date.parse(`${date}T00:00:00Z`) / 86400000);
-  return COLLECTIONS[((days % COLLECTIONS.length) + COLLECTIONS.length) % COLLECTIONS.length]!;
+  const n = COLLECTIONS.length;
+  return COLLECTIONS[(((days * 3 + slot) % n) + n) % n]!;
 }
 
 async function getJson(url: string): Promise<unknown> {
@@ -179,16 +211,22 @@ export async function currentMints(): Promise<Mint[]> {
   return all.flat();
 }
 
-/** Today's promo as a mint-shaped item, keyed by the date so it goes out once a day, or null before the hour or when the read fails. */
-export async function promoMint(hourUtc: number, now = Date.now()): Promise<Mint | null> {
+/**
+ * The promo due now, if any: the latest slot whose hour has passed today,
+ * keyed by date and slot so each goes out once. Null when no slot is due,
+ * or when the read fails.
+ */
+export async function promoMint(hoursUtc: number[], now = Date.now()): Promise<Mint | null> {
   const d = new Date(now);
-  if (d.getUTCHours() < hourUtc) return null;
   const date = d.toISOString().slice(0, 10);
-  const c = promoPick(date);
+  let slot = -1;
+  hoursUtc.forEach((h, i) => { if (d.getUTCHours() >= h) slot = i; });
+  if (slot < 0) return null;
+  const c = promoPick(date, slot);
   try {
     const j = await getJson(`${baseOf(c)}/api/${c.kind === "rolls" ? "state" : "today"}`);
-    const text = promoText(c, j, now);
-    return text ? { slug: c.slug, key: `promo:${date}`, id: 0, text, image: `https://${c.host}/today.png` } : null;
+    const p = promoBrief(c, j, slot, now);
+    return p ? { slug: c.slug, key: `promo:${date}:${slot}`, id: 0, text: p.text, image: `https://${c.host}/today.png`, brief: p.brief } : null;
   } catch (e) {
     console.warn(`announce: promo ${c.slug} not read: ${String((e as Error)?.message ?? e)}`);
     return null;
@@ -345,7 +383,7 @@ export async function post(auth: Auth, m: Mint): Promise<string> {
 
 // ---- the loop
 
-export type AnnouncerStatus = { enabled: boolean; auth: "oauth1" | "oauth2" | null; dryRun: boolean; seeded: boolean; seen: number; posted: number; failed: number; lastPostAt: string | null; lastError: string | null };
+export type AnnouncerStatus = { llm: ReturnType<typeof llmStatus>; enabled: boolean; auth: "oauth1" | "oauth2" | null; dryRun: boolean; seeded: boolean; seen: number; posted: number; failed: number; lastPostAt: string | null; lastError: string | null };
 
 /** Which of `now` are new, given what was seen. Pure, so the test can drive it. */
 export function fresh(now: Mint[], seen: Set<string>): Mint[] {
@@ -354,9 +392,10 @@ export function fresh(now: Mint[], seen: Set<string>): Mint[] {
 
 const seen = new Set<string>();
 /** UTC hour after which the daily note goes out; -1 turns it off. */
-let promoHour = 12;
-const status: AnnouncerStatus = { enabled: false, auth: null, dryRun: false, seeded: false, seen: 0, posted: 0, failed: 0, lastPostAt: null, lastError: null };
-export const announcerStatus = (): AnnouncerStatus => ({ ...status, seen: seen.size });
+/** UTC hours at which the promos go out, one collection each; empty turns them off. */
+let promoHours: number[] = [8, 14, 20];
+const status: Omit<AnnouncerStatus, "llm"> = { enabled: false, auth: null, dryRun: false, seeded: false, seen: 0, posted: 0, failed: 0, lastPostAt: null, lastError: null };
+export const announcerStatus = (): AnnouncerStatus => ({ ...status, seen: seen.size, llm: llmStatus() });
 
 async function loadSeen(file: string): Promise<void> {
   try {
@@ -379,14 +418,17 @@ export async function round(auth: Auth | null, file?: string): Promise<Mint[]> {
     console.log(`announce: seeded with ${seen.size} tokens, watching ${COLLECTIONS.map((c) => c.slug).join(", ")}`);
     return [];
   }
-  const promo = promoHour >= 0 ? await promoMint(promoHour) : null;
+  const promo = promoHours.length ? await promoMint(promoHours) : null;
   const todo = fresh(now, seen);
   if (promo && !seen.has(promo.key)) todo.push(promo);
   const out: Mint[] = [];
   for (const m of todo) {
     try {
       if (status.dryRun || !auth) console.log(`announce (dry run): ${m.text.replace(/\n/g, " ")} [${m.image}]`);
-      else console.log(`announce: ${m.key} posted as ${await post(auth, m)}`);
+      else {
+        const text = (await llmPost(m.brief)) ?? m.text;
+        console.log(`announce: ${m.key} posted as ${await post(auth, { ...m, text })}${text === m.text ? " (template)" : " (llm)"}`);
+      }
       seen.add(m.key);
       status.posted++;
       status.lastPostAt = new Date().toISOString();
@@ -406,7 +448,7 @@ export async function round(auth: Auth | null, file?: string): Promise<Mint[]> {
 export function startAnnouncer(env: Record<string, string | undefined> = process.env): boolean {
   const auth = authFromEnv(env);
   status.dryRun = env.ANNOUNCE_DRY_RUN === "1";
-  promoHour = env.ANNOUNCE_PROMO_HOUR_UTC === undefined ? 12 : Number(env.ANNOUNCE_PROMO_HOUR_UTC);
+  promoHours = (env.ANNOUNCE_PROMO_HOURS_UTC ?? "8,14,20").split(",").map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n >= 0 && n < 24).sort((a, b) => a - b);
   if (!auth && !status.dryRun) {
     console.log("announce: off, no X keys in the env");
     return false;

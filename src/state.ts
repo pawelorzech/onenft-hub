@@ -223,7 +223,9 @@ export async function allStates(): Promise<CollectionState[]> {
 
 /** One token as the wallet page shows it, whatever the collection calls it. */
 export type WalletToken = { id: number; unit: "day" | "face"; label: string; image: string; url: string; caption: string; bg: string | null };
-export type WalletState = { c: Collection; ok: boolean; tokens: WalletToken[]; fetchedAt: number; error: string | null };
+/** One fact a collection states about the wallet: a figure and a line under it. Counts and ids only, nothing worth anything. */
+export type WalletFact = { figure: string; label: string };
+export type WalletState = { c: Collection; ok: boolean; tokens: WalletToken[]; facts: WalletFact[]; fetchedAt: number; error: string | null };
 export type Wallet = { address: string | null; name: string | null; states: WalletState[]; fetchedAt: number };
 
 /** Normalize a collection's /api/holder answer. Daily collections list `days` with a `day`; rolls list `faces` with an `id`. */
@@ -251,6 +253,18 @@ export function tokensOf(c: Collection, j: unknown): WalletToken[] {
   return out;
 }
 
+/** A collection's optional `facts` list. Strings are clipped; anything else is dropped. */
+export function factsOf(j: unknown): WalletFact[] {
+  if (!isObj(j) || !Array.isArray(j.facts)) return [];
+  const out: WalletFact[] = [];
+  for (const f of j.facts.slice(0, 12)) {
+    if (!isObj(f) || typeof f.figure !== "string" || typeof f.label !== "string") continue;
+    const figure = f.figure.trim().slice(0, 24), label = f.label.trim().slice(0, 160);
+    if (figure && label) out.push({ figure, label });
+  }
+  return out;
+}
+
 const WALLET_MAX = 200;
 const wallets = new Map<string, Wallet>();
 
@@ -273,11 +287,11 @@ export async function walletOf(who: string): Promise<Wallet> {
           if (!addr) addr = address(j.address);
           if (!name) name = ensName(j.name);
         }
-        return { c, ok: true, tokens: tokensOf(c, j), fetchedAt: Date.now(), error: null };
+        return { c, ok: true, tokens: tokensOf(c, j), facts: factsOf(j), fetchedAt: Date.now(), error: null };
       } catch (e) {
         const error = String((e as Error)?.message ?? e).replace(/https?:\/\/\S+/g, "[upstream]").slice(0, 120);
         console.error(`${c.host} holder: ${error}`);
-        return old?.ok ? { ...old, ok: false, error } : { c, ok: false, tokens: [], fetchedAt: 0, error };
+        return old?.ok ? { ...old, ok: false, error } : { c, ok: false, tokens: [], facts: [], fetchedAt: 0, error };
       }
     }),
   );

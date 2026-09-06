@@ -39,8 +39,9 @@ test("names win over addresses, addresses are shortened, junk is null", () => {
 });
 
 test("only unseen keys are fresh", () => {
-  const a = { slug: "knot", key: "knot:1", id: 1, text: "", image: "" };
-  const b = { slug: "knot", key: "knot:2", id: 2, text: "", image: "" };
+  const brief = { facts: "", angle: "", url: "", tags: [], reference: "" };
+  const a = { slug: "knot", key: "knot:1", id: 1, text: "", image: "", brief };
+  const b = { slug: "knot", key: "knot:2", id: 2, text: "", image: "", brief };
   expect(fresh([a, b], new Set(["knot:1"]))).toEqual([b]);
 });
 
@@ -91,6 +92,18 @@ test("the daily note says what is open: a free day with hours left, a taken day,
   expect(promoText(knot, { day: 2, state: "taken", startsAt: 1788652800 }, now)).toStartWith("Day 2 of Knot is taken.\nOne Truchet knot a day. Tomorrow at 00:00 UTC");
   expect(promoText(faces, { totalSupply: 4, maxSupply: 10000, poolLeft: 50 })).toStartWith("Faces: 4 of 10,000 faces rolled, 50 one of ones still in the pool.");
   expect(promoText(faces, {})).toBeNull();
-  const picks = ["2026-09-06", "2026-09-07", "2026-09-08", "2026-09-09"].map((d) => promoPick(d).slug);
-  expect(new Set(picks).size).toBe(4);
+  const picks = [0, 1, 2].map((s) => promoPick("2026-09-06", s).slug);
+  expect(new Set(picks).size).toBe(3);
+  expect(promoPick("2026-09-07", 0).slug).not.toBe(promoPick("2026-09-06", 0).slug);
+});
+
+test("a model answer goes out only when it keeps the link, fits, has a tag, and has no em dash or emoji", () => {
+  const { accept } = require("./llm.ts");
+  const b = { facts: "", angle: "", url: "https://knot.onenft.click/day/3", tags: ["#onchain", "#Base"], reference: "" };
+  expect(accept("Day 3 is gone.\nhttps://knot.onenft.click/day/3\n#onchain #Base", b)).toBe(true);
+  expect(accept("Day 3 is gone.\nhttps://knot.onenft.click/day/4\n#onchain", b)).toBe(false);
+  expect(accept("Day 3 — gone.\nhttps://knot.onenft.click/day/3\n#onchain", b)).toBe(false);
+  expect(accept("Day 3 is gone 🎉\nhttps://knot.onenft.click/day/3\n#onchain", b)).toBe(false);
+  expect(accept("Day 3 is gone.\nhttps://knot.onenft.click/day/3", b)).toBe(false);
+  expect(accept("x".repeat(270) + "\nhttps://knot.onenft.click/day/3\n#onchain", b)).toBe(false);
 });
