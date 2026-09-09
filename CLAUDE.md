@@ -1,6 +1,6 @@
 # onenft.click (hub)
 
-The landing at the root of onenft.click, listing every daily collection: knot (`~/Programowanie/onenft`), blit (`~/Programowanie/onenft-blit`), chainrun (`~/Programowanie/onenft-chainrun`). Created 2026-09-05 when the knot moved from the root to `knot.onenft.click`. Operational identifiers live in `CLAUDE.local.md` (gitignored).
+The landing at the root of onenft.click, listing every daily collection: knot (`~/Programowanie/onenft/knot`), blit (`~/Programowanie/onenft/blit`), chainrun (`~/Programowanie/onenft/chainrun`). Created 2026-09-05 when the knot moved from the root to `knot.onenft.click`. Operational identifiers live in `CLAUDE.local.md` (gitignored).
 
 ## What this is
 

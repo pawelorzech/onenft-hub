@@ -313,6 +313,8 @@ export function homePage(states: CollectionState[]): string {
   const gaps = known.reduce((a, s) => a + (s.tally?.gaps ?? 0), 0);
   const faces = states.find((s) => s.c.kind === "rolls");
   const rolled = faces?.rolls?.rolled ?? null;
+  const one = states.find((s) => s.c.kind === "coins");
+  const coinsMinted = one?.rolls?.rolled ?? null;
   const knot = states.find((s) => s.c.slug === PALETTE_SOURCE);
   const ogImage = knot?.today ? knot.today.image.replace(/\.svg$/, ".png") : "https://knot.onenft.click/today.png";
   const dailyNames = daily.map((c) => c.name);
@@ -326,7 +328,7 @@ ${crumb()}
 <main id="main">
 <nav class="sitenav small" aria-label="Site">${states.map((s) => `<a href="#${s.c.slug}">${esc(s.c.name)}</a>`).join("")}<a href="#experiments">The experiments</a><a href="#faq">Questions</a><a href="/wallet">Your wallet</a></nav>
 ${states.map(collectionBlock).join("\n")}
-<section class="counts syne" aria-label="Totals"><div><b>${known.length ? num(taken) : "?"}</b><span class="small">${plural(taken, "day", "days")} claimed across ${known.length} of ${daily.length} daily collections</span></div><div><b>${known.length ? num(gaps) : "?"}</b><span class="small">${plural(gaps, "gap", "gaps")}</span></div><div><b>${rolled === null ? "?" : num(rolled)}</b><span class="small">${plural(rolled ?? 0, "face", "faces")} rolled</span></div></section>
+<section class="counts syne" aria-label="Totals"><div><b>${known.length ? num(taken) : "?"}</b><span class="small">${plural(taken, "day", "days")} claimed across ${known.length} of ${daily.length} daily collections</span></div><div><b>${known.length ? num(gaps) : "?"}</b><span class="small">${plural(gaps, "gap", "gaps")}</span></div><div><b>${rolled === null ? "?" : num(rolled)}</b><span class="small">${plural(rolled ?? 0, "face", "faces")} rolled</span></div><div><b>${coinsMinted === null ? "?" : num(coinsMinted)}</b><span class="small">${plural(coinsMinted ?? 0, "coin", "coins")} minted</span></div></section>
 <div class="prose" id="experiments">
 <h2 class="syne">The experiments</h2>
 <p>Five collections, one question each. Every image is drawn by a contract on Base and returned from <code>tokenURI</code> as a <code>data:</code> URI, so no server, file store or company has to stay alive for the token to keep its picture. All of it is CC0: take the images, remix them, mint them elsewhere. None of this is an investment, and ONE, the one that holds money, can lose it.</p>
@@ -404,7 +406,7 @@ eth.request({method:'eth_accounts'}).then(known).catch(function(){});
 if(eth.on){eth.on('accountsChanged',known);eth.on('disconnect',function(){known([])})}
 btn.addEventListener('click',async function(){if(btn.onclick)return;btn.disabled=true;
   try{var accs=await eth.request({method:'eth_requestAccounts'});if(!accs||!accs.length)throw new Error('the wallet gave no account');var acc=accs[0];remember(acc);location.href=BASE+acc}
-  catch(e){say(e&&e.code===4001?'Cancelled in the wallet.':e&&e.code===-32002?'The wallet is already asking. Open it to answer.':'Failed: '+((e&&e.message)||e));btn.disabled=false}});
+  catch(e){say(e&&e.code===4001?'Cancelled in the wallet.':e&&e.code===-32002?'The wallet is already asking. Open it to answer.':(e&&e.message)||'Could not connect wallet.');btn.disabled=false}});
 })();
 </script>`;
 }
@@ -472,13 +474,14 @@ function unit(c: Collection, n: number): string {
   return plural(n, u[0], u[1]);
 }
 
-function walletSection(s: WalletState): string {
+function walletSection(s: WalletState, who?: string | null): string {
   const c = s.c;
   const n = s.tokens.length;
-  const head = `<div class="head"><h2 class="syne" id="w-${c.slug}">${esc(c.name)}<span>${s.ok ? `${n} ${unit(c, n)}` : s.tokens.length ? `${n} ${unit(c, n)} as of ${ago(s.fetchedAt)}` : "could not be checked"}</span></h2><a class="small" href="https://${c.host}/yours">Your ${tokensWord(c)} on ${c.host}</a></div>`;
-  if (!s.ok && !n) return `<section class="wcoll" id="${c.slug}" aria-labelledby="w-${c.slug}">${head}<p class="small">${esc(c.name)} could not be checked. <a href="">Try again</a>, or <a href="https://${c.host}/yours">look there</a>.</p></section>`;
+  const target = who ? `https://${c.host}/${who}` : `https://${c.host}/yours`;
+  const head = `<div class="head"><h2 class="syne" id="w-${c.slug}">${esc(c.name)}<span>${s.ok ? `${n} ${unit(c, n)}` : s.tokens.length ? `${n} ${unit(c, n)} as of ${ago(s.fetchedAt)}` : "could not be checked"}</span></h2><a class="small" href="${target}">${who ? `View on ${c.host}` : `Your ${tokensWord(c)} on ${c.host}`}</a></div>`;
+  if (!s.ok && !n) return `<section class="wcoll" id="${c.slug}" aria-labelledby="w-${c.slug}">${head}<p class="small">${esc(c.name)} could not be checked. <a href="">Try again</a>, or <a href="${target}">look there</a>.</p></section>`;
   const dataAt = s.data?.readAt ? Date.parse(s.data.readAt) : NaN;
-  const dataNote = s.data ? `<p class="small">${s.data.known && Number.isFinite(dataAt) ? `Ownership checked ${ago(dataAt)}${s.data.stale ? "; data may be out of date" : ""}` : "Ownership could not be verified"}. <a href="https://${c.host}/yours">Open collection to refresh ownership</a>.</p>` : "";
+  const dataNote = s.data ? `<p class="small">${s.data.known && Number.isFinite(dataAt) ? `Ownership checked ${ago(dataAt)}${s.data.stale ? "; data may be out of date" : ""}` : "Ownership could not be verified"}. <a href="${target}">Open collection to refresh ownership</a>.</p>` : "";
   const note = dataNote + (!s.ok ? `<p class="small">${esc(c.name)} did not answer just now. This is its last answer, from ${ago(s.fetchedAt)}. <a href="">Try again</a>.</p>` : "");
   if (!n) return `<section class="wcoll" id="${c.slug}" aria-labelledby="w-${c.slug}">${head}${note}<p class="small">Nothing here yet.</p></section>`;
   const tiles = s.tokens.map((t) => {
@@ -526,7 +529,7 @@ ${wallet && total ? `<hr>\n${sizes}` : ""}
 <nav class="small" style="display:flex;flex-direction:column;gap:6px" aria-label="Collections">${states.map((s) => `<a href="${wallet ? `#${s.c.slug}` : `https://${s.c.host}/yours`}">${esc(s.c.name)}</a>`).join("")}<a href="/">All collections</a></nav>
 </div></aside>
 <main id="main">
-${wallet ? wallet.states.map(walletSection).join("\n") : states.map((s) => `<section class="wcoll" id="${s.c.slug}"><div class="head"><h2 class="syne">${esc(s.c.name)}</h2><a class="small" href="https://${s.c.host}/yours">Your ${tokensWord(s.c)} on ${s.c.host}</a></div></section>`).join("\n")}
+${wallet ? wallet.states.map((s) => walletSection(s, wallet.address ?? (handle || null))).join("\n") : states.map((s) => `<section class="wcoll" id="${s.c.slug}"><div class="head"><h2 class="syne">${esc(s.c.name)}</h2><a class="small" href="https://${s.c.host}/yours">Your ${tokensWord(s.c)} on ${s.c.host}</a></div></section>`).join("\n")}
 <footer><span>This is not an investment and never will be. Images are CC0.${wallet?.address ? ` <a href="/api/wallet/${wallet.address}.json">JSON</a>` : ""}</span><nav aria-label="Footer">${COLLECTIONS.map((c) => `<a href="https://${c.host}">${esc(c.name)}</a>`).join("")}<a href="/">All collections</a></nav></footer>
 </main>
 </div>

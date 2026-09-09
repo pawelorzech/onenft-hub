@@ -113,6 +113,7 @@ test("home page lists every collection, the totals, honest states and the audit 
   expect(h).toContain("--bg:#0b1d51;--fg:#f2e9d8");
   expect(h).toContain('og:image" content="https://knot.onenft.click/day/3.png"');
   expect(h).toContain("2 of 3 daily collections");
+  expect(h).toContain("coins minted");
   expect(h).toContain(`pin up to ${FACES_MAX_PINS} traits and colours for a fee that starts at ${FACES_FIRST_PIN_ETH} ETH and doubles with every pin, up to ${FACES_ALL_PINS_ETH} ETH`);
   expect(h).toContain("ONE can lose you money");
   expect(h).toContain("25,000 slots a series");
@@ -190,7 +191,7 @@ test("wallet page: Faces first, one section per collection, three chips per toke
   expect(h).toContain('aria-label="Download PNG of Face #12"');
   expect(h).toContain("Nothing here yet.");
   expect(h).toContain("Chain Run could not be checked.");
-  expect(h).toContain('href="https://chainrun.onenft.click/yours"');
+  expect(h).toContain(`href="https://chainrun.onenft.click/${A}"`);
   expect(h).toContain('class="sizes"');
   expect(h).toContain("onenft_size");
   expect(h).toContain(`/api/wallet/${A}.json`);
