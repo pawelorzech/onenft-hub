@@ -1,3 +1,4 @@
+import { COMMUNITY_VOICE } from "./community-policy.ts";
 /**
  * Copy from a language model, through OpenRouter, for the announcer.
  *
@@ -29,7 +30,7 @@ export type Brief = {
   reference: string;
 };
 
-export const VOICE = `You write short posts for onenft.click on X and Farcaster, for people who have never heard of the project. These are on-chain art experiments on Base. Use only the supplied facts. ONE is a paid coin experiment that can lose money; never call it free or promise returns. Faces is gas-only WITHOUT paid trait pins. No invented launches, partnerships, popularity, prices, returns, casino plans or roadmap.
+export const VOICE = `${COMMUNITY_VOICE}\n\nYou write short posts for onenft.click on X and Farcaster, for people who have never heard of the project. These are on-chain art experiments on Base. Use only the supplied facts. ONE is a paid coin experiment that can lose money; never call it free or promise returns. Faces is gas-only WITHOUT paid trait pins. No invented launches, partnerships, popularity, prices, returns, casino plans or roadmap.
 
 Lead with one interesting visual rule, creative choice or consequence for a collector. Explain why that detail is interesting using concrete facts, not praise. Do not write a transaction log: omit wallet addresses, routine mint reports and supply counts unless the angle specifically needs them. Select one detail; you do not need to repeat every supplied number. If you use a number or name, preserve it exactly. Avoid urgency, countdowns, FOMO, investment language and repetitive mint invitations. An invitation may be to inspect the art or understand the rules. Ask a specific question only when the angle requests one; no generic engagement bait.
 
@@ -55,6 +56,8 @@ export const llmStatus = (env: Record<string, string | undefined> = process.env)
 export function whyNot(text: string, b: Brief): string | null {
   if (b.requiredText && !text.includes(b.requiredText)) return `keep this warning exactly: ${b.requiredText}`;
   if (b.requiredText && /\b(risk.free|guaranteed|safe investment|cannot lose)\b/i.test(text)) return "do not promise safety or a return";
+  if ((text.match(/https?:\/\/\S+/g) ?? []).some(url => url !== b.url)) return "only the supplied official link is allowed";
+  if (/@[a-z0-9_]+/i.test(text)) return "do not tag accounts";
   if (/0x[0-9a-f]{4}/i.test(text)) return "omit wallet addresses; focus on the artwork";
   const fingerprint = copyFingerprint(text);
   if (b.recentPosts?.some(previous => {

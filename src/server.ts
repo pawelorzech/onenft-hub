@@ -1,3 +1,4 @@
+import { startCommunity, communityStatus } from "./community.ts";
 import { sitemapResponse, robotsTxt } from "./seo.ts";
 import { allStates, walletOf } from "./state.ts";
 import { homePage, walletPage, goTarget, serviceError, SITE } from "./site.ts";
@@ -54,7 +55,7 @@ async function route(url: URL): Promise<Response> {
   if (path === "/ready") {
     const states = await allStates();
     const ok = states.some((s) => s.status.known);
-    return json({ ok, delivery: deliveryStatus(), collections: states.map((s) => ({ slug: s.c.slug, known: s.status.known, stale: s.status.stale, ageSeconds: s.status.ageSeconds, error: s.status.error, upstream: s.upstream })) }, 0, ok ? 200 : 503);
+    return json({ ok, community: communityStatus(), delivery: deliveryStatus(), collections: states.map((s) => ({ slug: s.c.slug, known: s.status.known, stale: s.status.stale, ageSeconds: s.status.ageSeconds, error: s.status.error, upstream: s.upstream })) }, 0, ok ? 200 : 503);
   }
   if (path === "/robots.txt") return new Response(robotsTxt(SITE), { headers: { "content-type": "text/plain; charset=utf-8" } });
   if (path === "/go") return redirect(goTarget(url.searchParams.get("who"), "/wallet/", "/wallet"), 302);
@@ -105,4 +106,5 @@ if (import.meta.main) {
   if (process.send) process.send({ port: server.port });
   console.log(`${SITE} on :${PORT}`);
   startAnnouncer();
+  startCommunity();
 }

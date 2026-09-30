@@ -162,3 +162,10 @@ test("editorial cadence is one slot with mint reports opt-in; explicit schedules
   expect(editorialSettings({ ANNOUNCE_MINTS: "1", ANNOUNCE_PROMO_HOURS_UTC: "20,8,8,NaN,25" })).toEqual({ announceMints: true, promoHours: [8,20] });
   expect(editorialSettings({ ANNOUNCE_PROMO_HOURS_UTC: "" }).promoHours).toEqual([]);
 });
+
+test("original AI posts cannot add external destinations or tag accounts",()=>{
+  const {accept}=require("./llm.ts");
+  const b={url:"https://knot.onenft.click",facts:"",angle:"",tags:["#onchain"],reference:""};
+  expect(accept(`See https://evil.invalid\n${b.url}\n#onchain`,b)).toBe(false);
+  expect(accept(`Hey @someone\n${b.url}\n#onchain`,b)).toBe(false);
+});

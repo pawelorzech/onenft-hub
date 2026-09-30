@@ -76,3 +76,13 @@ export async function submitCastBytes(fc: Fc, body: Uint8Array): Promise<string>
   if (!res.ok || !j?.hash) throw new Error(`cast ${res.status}: ${(j?.error_detail ?? j?.error ?? JSON.stringify(j)).slice(0, 300)}`);
   return j.hash;
 }
+
+/** Replies bind their parent in code; the language model cannot choose a recipient. */
+export async function buildReply(fc: Fc, text: string, parent: { fid: number; hash: string }): Promise<Uint8Array> {
+  if (!Number.isSafeInteger(parent.fid) || parent.fid <= 0 || !/^0x[0-9a-f]{40}$/i.test(parent.hash) || utf8(text) > CAST_LIMIT) throw new Error("invalid reply");
+  const hash = hexStringToBytes(parent.hash);
+  if (hash.isErr()) throw new Error("invalid parent hash");
+  const r = await makeCastAdd({ text, type: CastType.CAST, embeds: [], embedsDeprecated: [], mentions: [], mentionsPositions: [], parentCastId: { fid: parent.fid, hash: hash.value } }, { fid: fc.fid, network: FarcasterNetwork.MAINNET }, fc.signer);
+  if (r.isErr()) throw new Error("reply not built");
+  return Message.encode(r.value).finish();
+}
