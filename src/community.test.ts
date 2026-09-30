@@ -157,3 +157,22 @@ test("classifier sends only isolated public data and rejects an injected output 
     expect(w.state.items[hash(1)].state).toBe("draft");
   }finally{mock.mockRestore();}
 });
+
+test("public diagnostics identify known failures but never expose upstream content",async()=>{
+  const {communityError}=await import("./community.ts");
+  expect(communityError(new Error("community source castsByParent HTTP 429"))).toContain("HTTP 429");
+  expect(communityError(new Error("secret-token attacker instructions"))).not.toContain("secret-token");
+});
+
+
+test("all-null Snapchain shard cursor ends a nonempty final page",async()=>{
+  let mentions=0;
+  const raw={hash:hash(1),data:{fid:42,timestamp:Math.floor((now-1609459200000)/1000),network:1,castAddBody:{text:"Hi",mentions:[fc.fid]}}};
+  const fake=Object.assign(async(url:any)=>{
+    const u=new URL(String(url));
+    if(u.pathname.endsWith("castsByFid"))return Response.json({messages:[],nextPageToken:Buffer.from(JSON.stringify([null,null])).toString("base64")});
+    mentions++;return Response.json({messages:mentions===1?[raw]:[],nextPageToken:Buffer.from(JSON.stringify([null,null])).toString("base64")});
+  },{preconnect:fetch.preconnect});
+  const mock=spyOn(globalThis,"fetch").mockImplementation(fake);
+  try{const w=new CommunityWorker(fc,"draft","unused",choice,persist,()=>now);await w.tick();expect(mentions).toBe(1);expect(w.state.items[hash(1)].state).toBe("draft");}finally{mock.mockRestore();}
+});

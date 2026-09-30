@@ -123,13 +123,22 @@ export class CommunityWorker {
       const url = new URL(`${this.fc.hub}/v1/${endpoint}`);
       url.search = new URLSearchParams({ ...params, pageSize:"50", reverse:"true", ...(pageToken ? {pageToken} : {}) }).toString();
       const res = await fetch(url, { signal: AbortSignal.timeout(10000), redirect: "error" });
-      if (!res.ok) throw new Error("community source unavailable");
+      if (!res.ok) throw new Error(`community source ${endpoint} HTTP ${res.status}`);
       const data = await res.json() as { messages?: unknown[]; nextPageToken?: string };
       if (!Array.isArray(data.messages) || data.messages.length > 50) throw new Error("invalid community page");
       out.push(...data.messages.map(incoming).filter((m):m is Incoming=>m!==null));
+      // Snapchain can return a non-empty sentinel token on an empty final page.
+      if (data.messages.length === 0) break;
       const next = data.nextPageToken;
       if (!next) break;
-      if (typeof next !== "string" || next.length > 2048 || next === pageToken) throw new Error("invalid community pagination");
+      if (typeof next !== "string" || next.length > 2048) throw new Error("invalid community pagination");
+      // The public Snapchain hub uses base64 JSON shard cursors. All-null
+      // cursors mark exhaustion even on a non-empty last page; replaying that
+      // sentinel starts the same page again.
+      let exhausted = false;
+      try { const cursors = JSON.parse(Buffer.from(next, "base64").toString("utf8")); exhausted = Array.isArray(cursors) && cursors.length > 0 && cursors.every(c => c === null); } catch {}
+      if (exhausted) break;
+      if (next === pageToken) throw new Error("invalid community pagination");
       pageToken = next;
     }
     return out;
@@ -146,6 +155,15 @@ export class CommunityWorker {
   }
 }
 
+/** Only locally constructed diagnostics may appear in the public status. */
+export function communityError(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  if (/^community source (castsByFid|castsByMention|castsByParent) HTTP [1-5][0-9]{2}$/.test(message)) return message;
+  if (["community persistence failed; restart required", "community requires restart", "invalid community page", "invalid community pagination", "community outbox binding failed", "opt-out capacity reached; operator required"].includes(message)) return message;
+  if (error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name)) return "community source request timed out";
+  return "community check failed; inspect private state and source availability";
+}
+
 let worker: CommunityWorker | null = null;
 let mode: Mode = "off";
 let lastError: string | null = null;
@@ -159,7 +177,7 @@ export function startCommunity(env: Record<string,string|undefined> = process.en
   worker = w;
   // One worker only, following the same deployment constraints as the announcer.
   void w.load().then(() => {
-    const tick = () => void w.tick().then(()=> { lastError=null; }).catch(()=> { lastError="community check failed; inspect private state and source availability"; });
+    const tick = () => void w.tick().then(()=> { lastError=null; }).catch((e: unknown)=> { lastError=communityError(e); });
     tick(); setInterval(tick, 300000);
   }).catch(()=> { lastError="community state failed to load; worker stopped"; });
   return true;
