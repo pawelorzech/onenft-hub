@@ -50,3 +50,25 @@ ONE announcements describe minting, including `awaits reveal` for sealed coins. 
 ## First v1 cutover while serving the website
 
 The first v2 application may start against the existing v1 file: delivery fails closed while HTTP pages remain available. Wait until the old container has stopped, then take the final ledger backup, migrate and atomically install v2, and restart the new container once so it loads v2. This exception is safe only for the first v1 cutover because the new worker cannot send. Subsequent v2 deployments still require stop-before-start for the announcer. Never migrate while an old worker can still write the ledger.
+
+## Editorial mode (2026-10-01)
+
+Default: `ANNOUNCE_MINTS=0` (also when absent), `ANNOUNCE_PROMO_HOURS_UTC=14`.
+Mint discovery still advances durable cursors, but newly discovered mints have no
+outbound channels. Re-enabling mint announcements does not backfill those events.
+Previously queued deliveries keep their existing state and may still be sent;
+this is not a global daily delivery cap. Do not erase the queue to change cadence.
+Existing explicit promo hours override the new default: set them to `14` when
+rolling out the one-post-per-day policy. Empty promo hours disables scheduled posts.
+
+Scheduled art posts rotate between an explanation, a constraint and a concrete
+question. Deterministic fallback copy follows the same editorial approach.
+The model receives up to 12 recent prepared posts from the persisted queue;
+validation rejects repeated normalized text, repeated six-word openings and wallet
+addresses. This is a lexical check, not a guarantee against semantic repetition.
+ONE retains deterministic copy and its loss warning. No casino promises are added.
+ONE promos use the latest valid recent coin image; with no coin, Farcaster embeds
+only the page and X skips image upload. ONE does not provide `/today.png`.
+
+These source changes require a separate deployment to affect the live account.
+Test without live credentials; unit tests mock network calls and never publish.

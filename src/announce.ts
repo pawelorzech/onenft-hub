@@ -1,5 +1,6 @@
 /**
- * Mint announcer: one post on X for every new token in every collection.
+ * Editorial announcer: one scheduled collection story per day by default.
+ * Per-mint delivery is opt-in; discovery cursors still advance when disabled.
  *
  * Every ANNOUNCE_EVERY_MS it pages /api/mints from a durable contract-scoped
  * cursor. First boot seeds the current head; later restarts recover backlog.
@@ -208,6 +209,35 @@ export function promoBrief(c: Collection, j: unknown, slot = 0, now = Date.now()
   return { text, brief: { facts, angle, url, tags, reference: text } };
 }
 
+/** Editorial fallback is useful even without an LLM. No stale countdowns. */
+export function editorialBrief(c: Collection, j: unknown, slot = 0, now = Date.now()): { text: string; brief: Brief } | null {
+  const p = promoBrief(c, j, slot, now);
+  if (!p || c.kind === "coins") return p;
+  const index = ((Math.floor(now / 86400000) + slot) % 3 + 3) % 3;
+  const daily = [
+    `${c.line} The image is computed on chain from the day number. Explore the rules behind the work.`,
+    `${c.name}: a day nobody claims stays empty forever. The gaps become part of the collection.`,
+    `${c.name} leaves unclaimed days empty forever. Would you keep the gaps or allow late claims?`,
+  ];
+  const rolls = [
+    "Faces builds a portrait from seven pixel layers and five colours. Leave the traits to chance, or pin choices for a fee. Gas applies either way.",
+    "In Faces, rare and legendary traits cannot be pinned. Paying for a choice does not let you choose those traits.",
+    "Faces lets you pin traits for a fee or leave them to chance. Would you choose your portrait or let the roll decide? Gas applies either way.",
+  ];
+  const text = fit([(c.kind === "daily" ? daily : rolls)[index]!], p.brief.url, p.brief.tags.slice(0, 2));
+  return { text, brief: { ...p.brief, reference: text, angle: [
+    "explain one concrete creative rule to a newcomer; invite exploration, no question",
+    "explain one surprising constraint and its consequence; no countdown or question",
+    "ask one specific question about a supplied design choice, without implying a planned change",
+  ][index]! } };
+}
+
+/** ONE has no /today.png endpoint. Use a real recent coin or a page-only embed. */
+export function promoImage(c: Collection, j: unknown): string {
+  if (c.kind !== "coins") return `https://${c.host}/today.png`;
+  return coinMints(c, j).at(-1)?.image ?? "";
+}
+
 /** The template alone, for tests and for the plain path. */
 export function promoText(c: Collection, j: unknown, now = Date.now()): string | null {
   return promoBrief(c, j, 0, now)?.text ?? null;
@@ -257,8 +287,8 @@ export async function promoMint(hoursUtc: number[], now = Date.now()): Promise<M
   const c = promoPick(date, slot);
   try {
     const j = await getJson(`${baseOf(c)}/api/${c.kind === "daily" ? "today" : "state"}`);
-    const p = promoBrief(c, j, slot, now);
-    return p ? { slug: c.slug, key: `promo:${date}:${slot}`, id: 0, text: p.text, image: `https://${c.host}/today.png`, brief: p.brief } : null;
+    const p = editorialBrief(c, j, slot, now);
+    return p ? { slug: c.slug, key: `promo:${date}:${slot}`, id: 0, text: p.text, image: promoImage(c, j), brief: p.brief } : null;
   } catch (e) {
     console.warn(`announce: promo ${c.slug} not read: ${String((e as Error)?.message ?? e)}`);
     return null;
@@ -395,7 +425,7 @@ async function uploadPng(auth: Auth, png: Uint8Array): Promise<string> {
 /** One post, with the picture when the auth may upload one. Returns the post id. A 401 gets one refresh and one retry. */
 export async function post(auth: Auth, m: Mint): Promise<string> {
   let mediaId: string | null = null;
-  if (auth.media) {
+  if (auth.media && m.image) {
     try {
       const img = await fetch(m.image, { signal: AbortSignal.timeout(15_000) });
       if (img.ok) mediaId = await uploadPng(auth, new Uint8Array(await img.arrayBuffer()));
@@ -428,7 +458,8 @@ export function fresh(now: Mint[], seen: Set<string>): Mint[] {
 
 /** UTC hour after which the daily note goes out; -1 turns it off. */
 /** UTC hours at which the promos go out, one collection each; empty turns them off. */
-let promoHours: number[] = [8, 14, 20];
+let promoHours: number[] = [14];
+let announceMints = false;
 const status: Omit<AnnouncerStatus, "llm"> = { enabled: false, auth: null, fc: { fid: null, posted: 0, failed: 0, lastError: null }, dryRun: false, seeded: false, seen: 0, posted: 0, failed: 0, lastPostAt: null, lastError: null };
 export const announcerStatus = (): AnnouncerStatus => ({ ...status, fc: { ...status.fc }, seen: queue?.summary().jobs ?? 0, llm: llmStatus() });
 
@@ -471,7 +502,7 @@ async function runRound(auth: Auth | null, file?: string, fc: Fc | null = null):
   const q = queue;
   const channels: Channel[] = dry ? ['x'] : [...(auth ? ['x' as const] : []), ...(fc ? ['fc' as const] : [])];
   for (const c of ANNOUNCED) {
-    try { await collectPages(q,channels,[c]); }
+    try { await collectPages(q,announceMints ? channels : [],[c]); }
     catch(e) { status.failed++; status.lastError = String((e as Error).message).replace(/https?:\/\/\S+/g,'[upstream]').slice(0,200); }
   }
   status.seeded = true;
@@ -479,8 +510,11 @@ async function runRound(auth: Auth | null, file?: string, fc: Fc | null = null):
   if (promo) await q.promo(promo,channels);
   const out: Mint[] = [];
   await q.deliver(async(job) => {
-    if (!job.text) job.text = dry || job.mint.slug === "one" ? job.mint.text : (await llmPost(job.mint.brief)) ?? job.mint.text;
-    if (fc && !job.fcBody && !dry) job.fcBody = Buffer.from(await buildCast(fc,castText(job.text,job.mint.brief.url),[job.mint.image,job.mint.brief.url])).toString('base64');
+    if (!job.text) {
+      const recentPosts = Object.values(q.state.jobs).filter(j => j !== job && j.text).slice(-12).map(j => j.text!);
+      job.text = dry || job.mint.slug === "one" ? job.mint.text : (await llmPost({ ...job.mint.brief, recentPosts })) ?? job.mint.text;
+    }
+    if (fc && !job.fcBody && !dry) job.fcBody = Buffer.from(await buildCast(fc,castText(job.text,job.mint.brief.url),[job.mint.image,job.mint.brief.url].filter(Boolean))).toString('base64');
   }, {
     x: dry ? async(job) => { console.log('announce (dry run): ' + job.text); out.push(job.mint); return 'dry-run'; } : auth ? async(job) => {
       let id: string; try { id = await post(auth,{...job.mint,text:job.text!}); } catch(e) { status.failed++; status.lastError = "X delivery failed; see delivery queue"; throw e; } status.posted++; status.lastPostAt = new Date().toISOString(); out.push(job.mint); return id;
@@ -490,12 +524,19 @@ async function runRound(auth: Auth | null, file?: string, fc: Fc | null = null):
   return out;
 }
 
+export function editorialSettings(env: Record<string, string | undefined>) {
+  return {
+    announceMints: env.ANNOUNCE_MINTS === "1",
+    promoHours: [...new Set((env.ANNOUNCE_PROMO_HOURS_UTC ?? "14").split(",").filter(s => s.trim() !== "").map(s => Number(s.trim())).filter(n => Number.isInteger(n) && n >= 0 && n < 24))].sort((a, b) => a - b),
+  };
+}
+
 /** Starts the timer when an X auth or a Farcaster key is present, or dry run is on. Returns whether it started. */
 export function startAnnouncer(env: Record<string, string | undefined> = process.env): boolean {
+  ({ announceMints, promoHours } = editorialSettings(env));
   const auth = authFromEnv(env);
   const fc = fcFromEnv(env);
   status.dryRun = env.ANNOUNCE_DRY_RUN === "1";
-  promoHours = (env.ANNOUNCE_PROMO_HOURS_UTC ?? "8,14,20").split(",").filter((s) => s.trim() !== "").map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n >= 0 && n < 24).sort((a, b) => a - b);
   if (!auth && !fc && !status.dryRun) {
     console.log("announce: off, no X keys and no Farcaster key in the env");
     return false;

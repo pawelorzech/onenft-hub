@@ -130,3 +130,35 @@ test("ONE promos retain the warning and never describe a free mint", () => {
   expect(result).not.toMatch(/\bfree\b/i);
   expect(xLength(result)).toBeLessThanOrEqual(280);
 });
+
+test("editorial fallback rotates useful angles without wallet reports or countdowns", () => {
+  const { editorialBrief, promoImage } = require("./announce.ts");
+  const now = Date.UTC(2026, 9, 1, 14);
+  const posts = [0, 1, 2].map(slot => editorialBrief(knot, { day: 27, state: "free", startsAt: now / 1000 }, slot, now).text);
+  expect(new Set(posts).size).toBe(3);
+  for (const text of posts) {
+    expect(text).not.toMatch(/hours left|0x|claimed by/);
+    expect(xLength(text)).toBeLessThanOrEqual(280);
+  }
+  const one = COLLECTIONS.find(c => c.slug === "one")!;
+  expect(promoImage(one, {})).toBe("");
+  expect(promoImage(one, { recent: [{ id: 4 }, { id: 9 }] })).toBe("https://one.onenft.click/coin/9-1024.png");
+  expect(promoImage(faces, {})).toBe("https://faces.onenft.click/today.png");
+  expect(editorialBrief(one, {}, 0, now).text).toContain("ONE can lose you money.");
+});
+
+test("copy guard rejects recycled openings and wallet reports", () => {
+  const { accept } = require("./llm.ts");
+  const url = "https://knot.onenft.click";
+  const b = { facts: "", angle: "", url, tags: ["#onchain"], reference: "", recentPosts: [`Day 26 of Knot is gone.\n${url}\n#onchain`] };
+  expect(accept(`Day 27 of Knot is gone.\n${url}\n#onchain`, b)).toBe(false);
+  expect(accept(`Wallet 0x84Cf claimed the day.\n${url}\n#onchain`, b)).toBe(false);
+  expect(accept(`Unclaimed days leave permanent gaps in Knot.\n${url}\n#onchain`, b)).toBe(true);
+});
+
+test("editorial cadence is one slot with mint reports opt-in; explicit schedules remain supported", () => {
+  const { editorialSettings } = require("./announce.ts");
+  expect(editorialSettings({})).toEqual({ announceMints: false, promoHours: [14] });
+  expect(editorialSettings({ ANNOUNCE_MINTS: "1", ANNOUNCE_PROMO_HOURS_UTC: "20,8,8,NaN,25" })).toEqual({ announceMints: true, promoHours: [8,20] });
+  expect(editorialSettings({ ANNOUNCE_PROMO_HOURS_UTC: "" }).promoHours).toEqual([]);
+});
