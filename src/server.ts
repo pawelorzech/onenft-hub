@@ -1,5 +1,6 @@
+import { sitemapResponse, robotsTxt } from "./seo.ts";
 import { allStates, walletOf } from "./state.ts";
-import { homePage, walletPage, goTarget, SITE } from "./site.ts";
+import { homePage, walletPage, goTarget, serviceError, SITE } from "./site.ts";
 import { COLLECTIONS } from "./collections.ts";
 import { startAnnouncer, announcerStatus, deliveryStatus } from "./announce.ts";
 
@@ -15,7 +16,7 @@ const json = (o: unknown, maxAge = 15, status = 200) =>
 const redirect = (to: string, status = 301) => new Response(null, { status, headers: { location: to } });
 
 /** Paths this site answers itself. Everything else belonged to the knot and redirects there. */
-export const OWN = new Set(["/", "/api/collections.json", "/health", "/ready", "/robots.txt", "/wallet", "/go"]);
+export const OWN = new Set(["/", "/api/collections.json", "/health", "/ready", "/robots.txt", "/sitemap.xml", "/wallet", "/go"]);
 /** An address or ENS name, the same rule the collection sites use. */
 const WHO = /^(0x[0-9a-fA-F]{40}|[a-z0-9-]+(?:\.[a-z0-9-]+)*\.eth)$/i;
 
@@ -37,13 +38,15 @@ export async function handle(req: Request): Promise<Response> {
     return withHeaders(await route(url));
   } catch (e) {
     console.error(`route ${url.pathname}:`, (e as Error).message);
-    return withHeaders(url.pathname.startsWith("/api/") ? json({ error: "internal error" }, 0, 500) : new Response("internal error", { status: 500, headers: { "content-type": "text/plain" } }));
+    return withHeaders(url.pathname.startsWith("/api/") ? json({ error: "internal error" }, 0, 500) : html(serviceError(), 500));
   }
 }
 
 async function route(url: URL): Promise<Response> {
   const path = url.pathname;
   if (url.hostname === `www.${SITE}`) return redirect(`https://${SITE}${path}${url.search}`);
+  const map = sitemapResponse(url, SITE, ["/"]);
+  if (map) return map;
   const wallet = path.match(/^\/(api\/)?wallet\/([^/]+?)(\.json)?$/);
   if (!OWN.has(path) && !wallet) return redirect(`${KNOT}${path}${url.search}`);
   // Liveness never waits on an upstream; readiness reports each one.
@@ -53,7 +56,7 @@ async function route(url: URL): Promise<Response> {
     const ok = states.some((s) => s.status.known);
     return json({ ok, delivery: deliveryStatus(), collections: states.map((s) => ({ slug: s.c.slug, known: s.status.known, stale: s.status.stale, ageSeconds: s.status.ageSeconds, error: s.status.error, upstream: s.upstream })) }, 0, ok ? 200 : 503);
   }
-  if (path === "/robots.txt") return new Response("User-agent: *\nAllow: /\nDisallow: /wallet/\nDisallow: /api/\n", { headers: { "content-type": "text/plain" } });
+  if (path === "/robots.txt") return new Response(robotsTxt(SITE), { headers: { "content-type": "text/plain; charset=utf-8" } });
   if (path === "/go") return redirect(goTarget(url.searchParams.get("who"), "/wallet/", "/wallet"), 302);
   if (wallet) {
     let who: string;

@@ -6,6 +6,8 @@
  * Copy rules: plain words, active voice, no adverbs, no em dashes, nothing a
  * reader could misunderstand. Facts (numbers, addresses, paths) stay exact.
  */
+import { pageDescription } from "./seo.ts";
+import { walletError } from "./wallet-error.ts";
 import { COLLECTIONS, PALETTE_SOURCE, FACES_MAX, FACES_MAX_PINS, FACES_FIRST_PIN_ETH, FACES_ALL_PINS_ETH, type Collection } from "./collections.ts";
 import type { CollectionState, Wallet, WalletState } from "./state.ts";
 
@@ -72,8 +74,11 @@ function css(p: Colors): string {
 [hidden]{display:none!important}
 html{background:var(--bg);color:var(--fg);font-family:"Newsreader",Georgia,serif;font-size:17px;line-height:1.5}
 body{margin:0;min-height:100vh}
+main,aside,.meta{min-width:0}
+p,li,dd,.crumb,.lead,.small,.wname{overflow-wrap:anywhere}
+main{scroll-margin-top:16px}
 a{color:inherit}
-a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(--fg);outline-offset:3px}
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--fg);outline-offset:3px}
 .skip{position:absolute;left:-999px;top:8px;background:var(--fg);color:var(--bg);padding:8px 14px;font-weight:700;z-index:9}
 .skip:focus{left:8px}
 .syne{font-family:"Syne",system-ui,sans-serif}
@@ -123,20 +128,20 @@ footer nav{display:flex;gap:6px 20px;flex-wrap:wrap}
 .field{height:50px;padding:0 14px;border:1px solid var(--edge);background:transparent;color:var(--fg);width:100%;font-family:ui-monospace,Menlo,monospace;font-size:14px}
 .field::placeholder{color:var(--muted)}
 .msg{font-size:15px;color:var(--muted);min-height:1.5em;margin:0}
-.wname{overflow-wrap:normal;word-break:keep-all}
+.wname{overflow-wrap:anywhere;word-break:normal}
 .wcoll{padding:34px 34px 30px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:18px}
 .wcoll .head{display:flex;justify-content:space-between;align-items:baseline;gap:20px;flex-wrap:wrap}
 .wcoll h2{font-weight:800;font-size:34px;line-height:.95;letter-spacing:-.03em;margin:0}
 .wcoll h2 span{font-weight:400;font-size:17px;color:var(--muted);letter-spacing:0;margin-left:12px;font-family:"Newsreader",Georgia,serif}
-.facts{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));border-top:1px solid var(--line);border-left:1px solid var(--line);max-width:1120px}
+.facts{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr));border-top:1px solid var(--line);border-left:1px solid var(--line);max-width:1120px}
 .facts li{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:18px 20px 16px;display:flex;flex-direction:column;gap:6px;min-width:0}
 .facts .fig{font-weight:800;font-size:28px;line-height:1;letter-spacing:-.03em;white-space:nowrap}
 .facts .lab{font-size:15px;color:var(--muted);line-height:1.35}
 .strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px}
 .strip .tile{display:flex;flex-direction:column;gap:6px}
-.strip img{width:100%;aspect-ratio:1;display:block;box-shadow:0 0 0 1px var(--line);background:var(--soft)}
+.strip img{width:100%;height:auto;aspect-ratio:1;display:block;box-shadow:0 0 0 1px var(--line);background:var(--soft)}
 .strip img.pixel{image-rendering:pixelated}
-.strip .cap{font-size:14px;color:var(--muted)}
+.strip .cap{overflow-wrap:anywhere;font-size:14px;color:var(--muted)}
 .strip .cap a{text-decoration:none}
 .get{display:flex;gap:6px;flex-wrap:wrap}
 .get a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 12px;border:1px solid var(--edge);color:var(--fg);text-decoration:none;font-size:13px;font-weight:700;font-family:"Syne",system-ui,sans-serif}
@@ -194,6 +199,7 @@ export function tokensWord(c: Collection): string {
 
 /** `path` is the page's own path; a wallet page is not indexed, since it names an address. */
 export function layout(title: string, p: Colors, body: string, image: string, path = "/", index = true, description?: string): string {
+  description ??= pageDescription(SITE, path, DESCRIPTION);
   const alt = "Today's knot at knot.onenft.click, the card of " + SITE;
   return `<!doctype html>
 <html lang="en">
@@ -393,20 +399,21 @@ export function connectScript(base = "/", entry = false): string {
   return `<script>
 (function(){
 var BASE=${JSON.stringify(base)};var ENTRY=${entry ? "true" : "false"};var KEY='onenft_who';var btn=document.getElementById('connect');var out=document.getElementById('msg');var last=document.getElementById('last');
+${walletError.toString()}
 function say(t){if(out)out.textContent=t}
 function here(a){return location.pathname.toLowerCase()===(BASE+a).toLowerCase()}
 function remember(a){try{localStorage.setItem(KEY,a)}catch(e){}}
-function offer(a,label){if(!last||here(a))return;var l=last.querySelector('a');l.href=BASE+a;l.textContent=a.slice(0,6)+'\\u2026'+a.slice(-4);last.firstChild.textContent=label+': ';last.hidden=false}
+function offer(a,label){if(!last||here(a))return;var l=last.querySelector('a');l.href=BASE+a;l.textContent=a.slice(0,6)+'…'+a.slice(-4);last.firstChild.textContent=label+': ';last.hidden=false}
 var who=null;try{who=localStorage.getItem(KEY)}catch(e){}
 if(who&&/^0x[0-9a-fA-F]{40}$/.test(who))offer(who,'Last time here');
 if(!btn)return;var eth=window.ethereum;
-if(!eth||!eth.request){btn.disabled=true;btn.textContent='No wallet detected';say('No wallet detected. Enter a public address to browse, or open this site in your wallet\\u2019s browser to connect.');return}
+if(!eth||!eth.request){btn.disabled=true;btn.textContent='No wallet detected';say('No wallet detected. Enter a public address to browse, or open this site in your wallet’s browser to connect.');return}
 function known(accs){if(!accs||!accs.length){btn.textContent='Connect wallet';btn.onclick=null;btn.disabled=false;return}var a=accs[0];remember(a);if(here(a)){btn.textContent='This is your wallet';btn.disabled=true;return}if(ENTRY){location.replace(BASE+a);return}btn.textContent='Your wallet';btn.disabled=false;btn.onclick=function(){location.href=BASE+a};offer(a,'Connected')}
 eth.request({method:'eth_accounts'}).then(known).catch(function(){});
 if(eth.on){eth.on('accountsChanged',known);eth.on('disconnect',function(){known([])})}
 btn.addEventListener('click',async function(){if(btn.onclick)return;btn.disabled=true;
   try{var accs=await eth.request({method:'eth_requestAccounts'});if(!accs||!accs.length)throw new Error('the wallet gave no account');var acc=accs[0];remember(acc);location.href=BASE+acc}
-  catch(e){say(e&&e.code===4001?'Cancelled in the wallet.':e&&e.code===-32002?'The wallet is already asking. Open it to answer.':(e&&e.message)||'Could not connect wallet.');btn.disabled=false}});
+  catch(e){say(walletError(e));btn.disabled=false}});
 })();
 </script>`;
 }
@@ -429,11 +436,10 @@ document.querySelectorAll('[data-dl]').forEach(function(el){el.addEventListener(
   ev.preventDefault();if(busy){say('One download at a time. The other one is still drawing.');return}
   var kind=el.getAttribute('data-dl');var n=el.getAttribute('data-id')||el.getAttribute('data-day');var unit=el.getAttribute('data-unit')||'day';var prefix=el.getAttribute('data-prefix')||PREFIX;
   var pixel=el.hasAttribute('data-pixel')?el.getAttribute('data-pixel')==='1':PIXEL;var bg=el.getAttribute('data-bg')||'#000000';
-  busy=true;var was=el.textContent;el.textContent='\\u2026';el.setAttribute('aria-busy','true');say('');var u=null;
+  busy=true;var was=el.textContent;el.textContent='…';el.setAttribute('aria-busy','true');say('');var u=null;
   try{
     var ctl=new AbortController();var t=setTimeout(function(){ctl.abort()},20000);
-    var res;try{res=await fetch(el.getAttribute('data-src'),{signal:ctl.signal})}finally{clearTimeout(t)}
-    if(!res.ok)throw new Error('the image answered '+res.status);var text=await res.text();
+    var res,text;try{res=await fetch(el.getAttribute('data-src'),{signal:ctl.signal});if(!res.ok)throw new Error('the image answered '+res.status);text=await res.text()}finally{clearTimeout(t)}
     if(kind==='svg'){save(new Blob([text],{type:'image/svg+xml'}),prefix+'-'+unit+'-'+n+'.svg');return}
     text=text.replace(/ width="\\d+" height="\\d+"/,' width="'+size+'" height="'+size+'"');
     u=URL.createObjectURL(new Blob([text],{type:'image/svg+xml'}));var img=new Image();
@@ -493,8 +499,8 @@ function walletSection(s: WalletState, who?: string | null): string {
   return `<section class="wcoll" id="${c.slug}" aria-labelledby="w-${c.slug}">${head}${note}${facts}<div class="strip">${tiles.join("")}</div></section>`;
 }
 
-function whoBlock(): string {
-  return `<div class="who"><button class="cta syne" id="connect" type="button">Connect wallet</button><form action="/go" method="get" style="display:flex;flex-direction:column;gap:8px"><label for="who">Wallet address or ENS name</label><input class="field" id="who" name="who" placeholder="0x1234… or name.eth" autocomplete="off" spellcheck="false" required pattern="^\\s*(0x[0-9a-fA-F]{40}|[a-zA-Z0-9-]+(\\.[a-zA-Z0-9-]+)*\\.eth)\\s*$" title="A 42-character address starting with 0x, or an ENS name ending in .eth"><button class="cta ghost syne" type="submit">View wallet</button></form></div>
+function whoBlock(value = ""): string {
+  return `<div class="who"><button class="cta syne" id="connect" type="button">Connect wallet</button><form action="/go" method="get" style="display:flex;flex-direction:column;gap:8px"><label for="who">Wallet address or ENS name</label><input class="field" id="who" name="who" value="${esc(value)}" placeholder="0x1234… or name.eth" autocomplete="off" spellcheck="false" required pattern="^\\s*(0x[0-9a-fA-F]{40}|[a-zA-Z0-9\\-]+(\\.[a-zA-Z0-9\\-]+)*\\.eth)\\s*$" title="A 42-character address starting with 0x, or an ENS name ending in .eth"><button class="cta ghost syne" type="submit">View wallet</button></form></div>
 <p class="msg" id="msg" aria-live="polite"></p>
 <p class="small" id="last" hidden>Last time here: <a href="/wallet">…</a>.</p>`;
 }
@@ -522,7 +528,7 @@ ${crumb(wallet ? rawName : "Your wallet")}
 <hr>
 ${wallet ? `<div><div class="big syne">${checked ? num(total) : "?"}</div><p class="small">${found}</p></div>\n<hr>` : ""}
 ${bad !== null ? `<p class="note" role="alert">"${esc(bad)}" is not a wallet address or an ENS name. An address is 42 characters starting with 0x; a name ends in .eth.</p>` : ""}
-${whoBlock()}
+${whoBlock(bad ?? "")}
 <p class="small">Viewing a wallet needs no transaction and no signature. Its public address appears in the page URL and is sent to this site and to each collection site to load its tokens. Each site connects to a wallet on its own.</p>
 ${wallet && total ? `<hr>\n${sizes}` : ""}
 <hr>
@@ -535,5 +541,11 @@ ${wallet ? wallet.states.map((s) => walletSection(s, wallet.address ?? (handle |
 </div>
 ${connectScript("/wallet/", !wallet)}
 ${wallet && total ? downloadScript("onenft", false) : ""}`;
-  return layout(`${rawName}, ${SITE}`, p, body, "https://knot.onenft.click/today.png", wallet ? `/wallet/${wallet.address ?? handle}` : "/wallet", !wallet, wallet ? `${num(total)} ${plural(total, "token", "tokens")} across the collections at ${SITE}, held by ${rawName}.` : undefined);
+  return layout(`${rawName}, ${SITE}`, p, body, "https://knot.onenft.click/today.png", wallet ? `/wallet/${wallet.address ?? handle}` : "/wallet", false, wallet ? `${num(total)} ${plural(total, "token", "tokens")} across the collections at ${SITE}, held by ${rawName}.` : "Look up a public wallet or connect to browse its tokens across the OneNFT collections.");
+}
+
+/** A recoverable server failure; never expose a stack trace or collapse to a blank text page. */
+export function serviceError(): string {
+  const body = `<main id="main" class="single">${crumb("Unavailable")}<h1 class="syne">This page could not be loaded</h1><p>Please try again. Your wallet and any transaction already sent are unaffected.</p><nav class="nav" aria-label="Recovery"><a href="">Try again</a><a href="/">Back to the collections</a></nav></main>`;
+  return layout(`Unavailable | ${SITE}`, FALLBACK, body, "https://knot.onenft.click/today.png", "/", false, "This page could not be loaded. Try again.");
 }
