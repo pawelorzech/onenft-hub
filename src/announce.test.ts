@@ -112,15 +112,17 @@ test("the daily note says what is open: a free day with hours left, a taken day,
   expect(promoPick("2026-09-07", 0).slug).not.toBe(promoPick("2026-09-06", 0).slug);
 });
 
-test("a model answer goes out only when it keeps the link, fits, has a tag, and has no em dash or emoji", () => {
+test("a model answer goes out only when it keeps the link, fits, has tags, no em dash, and at most three emoji", () => {
   const { accept } = require("./llm.ts");
   const b = { facts: "", angle: "", url: "https://knot.onenft.click/day/3", tags: ["#onchain", "#Base"], reference: "" };
   expect(accept("Day 3 is gone.\nhttps://knot.onenft.click/day/3\n#onchain #Base", b)).toBe(true);
-  expect(accept("Day 3 is gone.\nhttps://knot.onenft.click/day/4\n#onchain", b)).toBe(false);
-  expect(accept("Day 3 — gone.\nhttps://knot.onenft.click/day/3\n#onchain", b)).toBe(false);
-  expect(accept("Day 3 is gone 🎉\nhttps://knot.onenft.click/day/3\n#onchain", b)).toBe(false);
+  expect(accept("Day 3 is gone.\nhttps://knot.onenft.click/day/4\n#onchain #Base", b)).toBe(false);
+  expect(accept("Day 3 — gone.\nhttps://knot.onenft.click/day/3\n#onchain #Base", b)).toBe(false);
+  expect(accept("Day 3 is gone! 🎉\nhttps://knot.onenft.click/day/3\n#onchain #Base", b)).toBe(true);
+  expect(accept("Day 3 is gone 🎉🔥⏳🎲\nhttps://knot.onenft.click/day/3\n#onchain #Base", b)).toBe(false);
+  expect(accept("Day 3 is gone.\nhttps://knot.onenft.click/day/3\n#onchain", b)).toBe(false);
   expect(accept("Day 3 is gone.\nhttps://knot.onenft.click/day/3", b)).toBe(false);
-  expect(accept("x".repeat(270) + "\nhttps://knot.onenft.click/day/3\n#onchain", b)).toBe(false);
+  expect(accept("x".repeat(270) + "\nhttps://knot.onenft.click/day/3\n#onchain #Base", b)).toBe(false);
 });
 
 test("ONE promos retain the warning and never describe a free mint", () => {
@@ -131,16 +133,24 @@ test("ONE promos retain the warning and never describe a free mint", () => {
   expect(xLength(result)).toBeLessThanOrEqual(280);
 });
 
-test("editorial fallback rotates useful angles without wallet reports or countdowns", () => {
+test("the scheduled fallback is loud, differs per slot, carries the countdown and every tag that fits, and never a wallet", () => {
   const { editorialBrief, promoImage } = require("./announce.ts");
-  const now = Date.UTC(2026, 9, 1, 14);
-  const posts = [0, 1, 2].map(slot => editorialBrief(knot, { day: 27, state: "free", startsAt: now / 1000 }, slot, now).text);
-  expect(new Set(posts).size).toBe(3);
-  for (const text of posts) {
-    expect(text).not.toMatch(/hours left|0x|claimed by/);
-    expect(xLength(text)).toBeLessThanOrEqual(280);
-  }
   const one = COLLECTIONS.find(c => c.slug === "one")!;
+  const now = Date.UTC(2026, 9, 1, 14);
+  const start = Date.UTC(2026, 9, 1) / 1000;
+  for (const [c, j] of [[knot, { day: 27, state: "free", startsAt: start, traits: { palette: "Hillside" } }], [knot, { day: 27, state: "taken", startsAt: start }], [faces, { totalSupply: 80, maxSupply: 10000, poolLeft: 50 }]] as const) {
+    const posts = [0, 1, 2].map(slot => editorialBrief(c, j, slot, now).text);
+    expect(new Set(posts).size).toBe(3);
+    for (const text of posts) {
+      expect(text).toMatch(/^\p{Extended_Pictographic}/u);
+      expect(text).toContain("!");
+      expect(text).toMatch(/\n#\S+( #\S+)+$/);
+      expect(text).not.toMatch(/0x|claimed by/);
+      expect(xLength(text)).toBeLessThanOrEqual(280);
+    }
+  }
+  expect(editorialBrief(knot, { day: 27, state: "free", startsAt: start }, 2, now).text).toContain("10 hours left");
+  expect(editorialBrief(one, {}, 0, now).text).not.toMatch(/\p{Extended_Pictographic}|!/u);
   expect(promoImage(one, {})).toBe("");
   expect(promoImage(one, { recent: [{ id: 4 }, { id: 9 }] })).toBe("https://one.onenft.click/coin/9-1024.png");
   expect(promoImage(faces, {})).toBe("https://faces.onenft.click/today.png");
@@ -156,9 +166,9 @@ test("copy guard rejects recycled openings and wallet reports", () => {
   expect(accept(`Unclaimed days leave permanent gaps in Knot.\n${url}\n#onchain`, b)).toBe(true);
 });
 
-test("editorial cadence is one slot with mint reports opt-in; explicit schedules remain supported", () => {
+test("the default cadence is three slots with mint reports opt-in; explicit schedules remain supported", () => {
   const { editorialSettings } = require("./announce.ts");
-  expect(editorialSettings({})).toEqual({ announceMints: false, promoHours: [14] });
+  expect(editorialSettings({})).toEqual({ announceMints: false, promoHours: [8, 14, 20] });
   expect(editorialSettings({ ANNOUNCE_MINTS: "1", ANNOUNCE_PROMO_HOURS_UTC: "20,8,8,NaN,25" })).toEqual({ announceMints: true, promoHours: [8,20] });
   expect(editorialSettings({ ANNOUNCE_PROMO_HOURS_UTC: "" }).promoHours).toEqual([]);
 });

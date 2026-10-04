@@ -5,12 +5,13 @@
  * one Farcaster runs), signed with an app key the account approved once
  * (`scripts/farcaster-signer.ts`). Needs FC_FID and FC_SIGNER_KEY (the
  * 32-byte signing key, hex) in the env; without them the channel stays off.
- * FC_CHANNEL, when set, is the parentUrl of a channel the account may cast
- * in; otherwise casts go to the home feed.
+ * Each collection casts into its own channel (`CHANNELS` in announce.ts).
+ * FC_CHANNEL, when set, is one parentUrl for every cast instead; FC_CHANNEL=home
+ * keeps every cast on the home feed.
  *
- * A cast is the X text without the link line and the tag line, cut to 320
- * bytes, with the picture and the page as its two embeds; Farcaster renders
- * embeds as cards, so the text does not repeat the link.
+ * A cast is the X text without the link line, tags kept, cut to 320 bytes,
+ * with the picture and the page as its two embeds; Farcaster renders embeds
+ * as cards, so the text does not repeat the link.
  */
 import { CastType, FarcasterNetwork, Message, NobleEd25519Signer, hexStringToBytes, makeCastAdd } from "@farcaster/core";
 
@@ -33,14 +34,20 @@ export function fcFromEnv(env: Record<string, string | undefined> = process.env)
 
 const utf8 = (s: string) => new TextEncoder().encode(s).length;
 
+/** Where a cast goes: FC_CHANNEL wins ("home" means no channel), then the collection's own channel, then the home feed. */
+export function channelFor(fc: Fc, own?: string | null): string | null {
+  if (fc.channel) return fc.channel === "home" ? null : fc.channel;
+  return own ?? null;
+}
+
 /**
- * The cast text from a post: the link line and the tag line go (they are
- * embeds and noise on Farcaster), then lines are dropped from the end until
- * the text fits 320 bytes. A single line that is still too long is cut at a
+ * The cast text from a post: the link line goes (it is an embed), the tag
+ * line stays, then lines are dropped from the end (tags first) until the
+ * text fits 320 bytes. A single line that is still too long is cut at a
  * space.
  */
 export function castText(text: string, url: string): string {
-  const lines = text.split("\n").map((l) => l.trim()).filter((l) => l && l !== url && !/^(#\S+\s*)+$/.test(l));
+  const lines = text.split("\n").map((l) => l.trim()).filter((l) => l && l !== url);
   for (let n = lines.length; n >= 1; n--) {
     const t = lines.slice(0, n).join("\n");
     if (utf8(t) <= CAST_LIMIT) return t;
@@ -53,10 +60,10 @@ export function castText(text: string, url: string): string {
   return one;
 }
 
-/** A signed, encoded CastAdd with up to two url embeds. */
-export async function buildCast(fc: Fc, text: string, embeds: string[]): Promise<Uint8Array> {
+/** A signed, encoded CastAdd with up to two url embeds, in the collection's channel when one is given. */
+export async function buildCast(fc: Fc, text: string, embeds: string[], channel?: string | null): Promise<Uint8Array> {
   const r = await makeCastAdd(
-    { text, type: CastType.CAST, embeds: embeds.slice(0, 2).map((url) => ({ url })), embedsDeprecated: [], mentions: [], mentionsPositions: [], parentUrl: fc.channel ?? undefined },
+    { text, type: CastType.CAST, embeds: embeds.slice(0, 2).map((url) => ({ url })), embedsDeprecated: [], mentions: [], mentionsPositions: [], parentUrl: channelFor(fc, channel) ?? undefined },
     { fid: fc.fid, network: FarcasterNetwork.MAINNET },
     fc.signer,
   );

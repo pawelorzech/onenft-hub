@@ -1,7 +1,7 @@
 import { test, expect } from "bun:test";
 import { Message, NobleEd25519Signer, isCastAddMessage, validations } from "@farcaster/core";
 import { ed25519 } from "@noble/curves/ed25519";
-import { buildCast, castText, fcFromEnv, CAST_LIMIT, DEFAULT_HUB } from "./farcaster.ts";
+import { buildCast, castText, channelFor, fcFromEnv, CAST_LIMIT, DEFAULT_HUB } from "./farcaster.ts";
 
 // A throwaway signing key for this test run only.
 const key = ed25519.utils.randomPrivateKey();
@@ -19,10 +19,11 @@ test("the channel needs a fid and a 32-byte key; the hub and the channel are opt
   expect(fcFromEnv({ FC_FID: "1", FC_SIGNER_KEY: hex, FC_HUB: "https://hub.pinata.cloud/", FC_CHANNEL: "https://onchainsummer.xyz" })).toMatchObject({ hub: "https://hub.pinata.cloud", channel: "https://onchainsummer.xyz" });
 });
 
-test("the cast keeps the words, drops the link line and the tags, and fits 320 bytes", () => {
+test("the cast keeps the words and the tags, drops the link line, and fits 320 bytes", () => {
   const url = "https://knot.onenft.click/day/12";
   const x = `Day 12 of Knot is claimed by pawelorzech.eth.\nOne Truchet knot a day. Today's palette: tar.\n${url}\n#generativeart #Truchet #onchain`;
-  expect(castText(x, url)).toBe("Day 12 of Knot is claimed by pawelorzech.eth.\nOne Truchet knot a day. Today's palette: tar.");
+  expect(castText(x, url)).toBe("Day 12 of Knot is claimed by pawelorzech.eth.\nOne Truchet knot a day. Today's palette: tar.\n#generativeart #Truchet #onchain");
+  expect(castText(`${"a".repeat(310)}\n${url}\n#generativeart #Truchet`, url)).toBe("a".repeat(310));
   const long = `${"a".repeat(200)}\n${"b".repeat(200)}\n${url}\n#x`;
   expect(castText(long, url)).toBe("a".repeat(200));
   const oneLong = `${"word ".repeat(100).trim()}\n${url}`;
@@ -46,6 +47,11 @@ test("a built cast is a valid signed CastAdd with the fid, the text and two url 
   expect(v.isOk()).toBe(true);
   const inChannel = Message.decode(await buildCast({ ...fc, channel: "https://onchainsummer.xyz" }, "gm", []));
   expect(inChannel.data!.castAddBody!.parentUrl).toBe("https://onchainsummer.xyz");
+  const own = "https://warpcast.com/~/channel/cc0";
+  expect(Message.decode(await buildCast(fc, "gm", [], own)).data!.castAddBody!.parentUrl).toBe(own);
+  expect(channelFor({ ...fc, channel: "https://onchainsummer.xyz" }, own)).toBe("https://onchainsummer.xyz");
+  expect(channelFor({ ...fc, channel: "home" }, own)).toBeNull();
+  expect(channelFor(fc)).toBeNull();
 });
 
 test("patched Farcaster factories work with Faker 10 in ESM and CommonJS", async () => {

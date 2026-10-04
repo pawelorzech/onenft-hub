@@ -72,3 +72,31 @@ only the page and X skips image upload. ONE does not provide `/today.png`.
 
 These source changes require a separate deployment to affect the live account.
 Test without live credentials; unit tests mock network calls and never publish.
+
+## Loud mode (2026-10-05)
+
+Last verified: 2026-10-05 | 2026-10-05
+
+Owner's decision, replacing the copy and cadence defaults of the editorial mode
+above. Mint reports stay opt-in (`ANNOUNCE_MINTS=0`).
+
+- Default `ANNOUNCE_PROMO_HOURS_UTC=8,14,20`: three scheduled posts a day, three
+  different collections. An explicit value in the env still wins.
+- Slots: morning (what is open), midday (one rule that sets the collection
+  apart), evening (the countdown to 00:00 UTC). The fallback templates carry an
+  emoji, an exclamation mark, the live countdown and a call to action. A daily
+  piece that is taken is never presented as open.
+- The model prompt (`VOICE` in `src/llm.ts`) asks for a hook, 1 to 3 emoji,
+  urgency from the supplied facts and a call to action. The validator allows up
+  to three emoji and requires two to five tags. Invented popularity, prices,
+  returns, wallet addresses, mentions and foreign links are still rejected.
+  The community reply persona (`COMMUNITY_VOICE`) no longer feeds this prompt;
+  replies keep their reviewed, calm answers.
+- ONE is unchanged: deterministic template, the loss warning, no model, no emoji.
+- Casts keep the tag line. Farcaster text is the post without the link line.
+- Channels: `CHANNELS` in `src/announce.ts` sends Knot and Faces to `cryptoart`
+  and Blit and Chain Run to `cc0`, both open to any caster on 2026-10-05. ONE
+  stays on the home feed. `FC_CHANNEL=<parentUrl>` sends everything to one
+  channel instead; `FC_CHANNEL=home` turns channels off without a deploy of new
+  code. The channel is signed into the cast when it is prepared, so a change
+  applies to casts prepared after the restart.

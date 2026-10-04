@@ -1,5 +1,5 @@
 /**
- * Editorial announcer: one scheduled collection story per day by default.
+ * Announcer: three scheduled collection posts per day by default.
  * Per-mint delivery is opt-in; discovery cursors still advance when disabled.
  *
  * Every ANNOUNCE_EVERY_MS it pages /api/mints from a durable contract-scoped
@@ -55,6 +55,13 @@ export const TAGS: Record<string, string[]> = {
   blit: ["#Blitmap", "#pixelart", "#onchain", "#Base", "#NFT", "#CC0"],
   chainrun: ["#ChainRunners", "#pixelart", "#onchain", "#Base", "#NFT", "#CC0"],
   faces: ["#pixelart", "#PFP", "#onchain", "#Base", "#NFT", "#CC0"],
+};
+/** The Farcaster channel (parentUrl) of a collection; only channels open to any caster. ONE stays on the home feed. */
+export const CHANNELS: Record<string, string> = {
+  knot: "https://warpcast.com/~/channel/cryptoart",
+  blit: "https://warpcast.com/~/channel/cc0",
+  chainrun: "https://warpcast.com/~/channel/cc0",
+  faces: "https://warpcast.com/~/channel/cryptoart",
 };
 /** One line on how to take part, per kind. */
 const HOW: Record<Collection["kind"], string> = {
@@ -209,27 +216,33 @@ export function promoBrief(c: Collection, j: unknown, slot = 0, now = Date.now()
   return { text, brief: { facts, angle, url, tags, reference: text } };
 }
 
-/** Editorial fallback is useful even without an LLM. No stale countdowns. */
+/** The loud angle of each slot, for the model. */
+const HYPE = [
+  "morning: what is open right now; make the reader want to claim or roll today",
+  "midday: one rule that makes this collection unlike the rest, told with energy, then the invitation",
+  "evening: the UTC day is running out; use the real countdown from the facts, say what is still free or what drops at midnight",
+];
+
+/** The scheduled post of a slot: a loud template that stands on its own, and the brief for the model. ONE keeps its plain template. */
 export function editorialBrief(c: Collection, j: unknown, slot = 0, now = Date.now()): { text: string; brief: Brief } | null {
   const p = promoBrief(c, j, slot, now);
   if (!p || c.kind === "coins") return p;
-  const index = ((Math.floor(now / 86400000) + slot) % 3 + 3) % 3;
+  const lead = p.brief.facts.split("\n")[0]!;
+  const i = ((slot % 3) + 3) % 3;
   const daily = [
-    `${c.line} The image is computed on chain from the day number. Explore the rules behind the work.`,
-    `${c.name}: a day nobody claims stays empty forever. The gaps become part of the collection.`,
-    `${c.name} leaves unclaimed days empty forever. Would you keep the gaps or allow late claims?`,
+    [`🌅 ${lead}`, `${c.line} ${HOW.daily}`, lead.includes("still free") ? "Go get it!" : "Be first at 00:00 UTC!"],
+    [`🔥 ${c.name} draws every piece on chain from the day number alone. A day nobody claims stays empty forever!`, lead],
+    [`⏳ ${lead}`, "The next one drops at 00:00 UTC. Free to claim, gas only. First wallet wins!"],
   ];
   const rolls = [
-    "Faces builds a portrait from seven pixel layers and five colours. Leave the traits to chance, or pin choices for a fee. Gas applies either way.",
-    "In Faces, rare and legendary traits cannot be pinned. Paying for a choice does not let you choose those traits.",
-    "Faces lets you pin traits for a fee or leave them to chance. Would you choose your portrait or let the roll decide? Gas applies either way.",
+    [`🎲 ${lead}`, "Roll one face per wallet today! Gas only unless you pin traits."],
+    ["👀 Seven pixel layers, five colours, and no fee can pin a rare or legendary trait. Only luck rolls them!", lead, "Roll yours today."],
+    [`⏳ Today's roll ends at 00:00 UTC! ${lead}`, "One face per wallet. Gas only unless you pin traits."],
   ];
-  const text = fit([(c.kind === "daily" ? daily : rolls)[index]!], p.brief.url, p.brief.tags.slice(0, 2));
-  return { text, brief: { ...p.brief, reference: text, angle: [
-    "explain one concrete creative rule to a newcomer; invite exploration, no question",
-    "explain one surprising constraint and its consequence; no countdown or question",
-    "ask one specific question about a supplied design choice, without implying a planned change",
-  ][index]! } };
+  const text = fit((c.kind === "daily" ? daily : rolls)[i]!, p.brief.url, p.brief.tags);
+  const ask = (Math.floor(now / 86400000) + slot) % 3 === 0 ? "; close with one specific question to the reader" : "";
+  const closed = c.kind === "daily" && !lead.includes("still free") ? "; today's piece is already taken, so the call is to be first at 00:00 UTC" : "";
+  return { text, brief: { ...p.brief, reference: text, angle: HYPE[i]! + closed + ask } };
 }
 
 /** ONE has no /today.png endpoint. Use a real recent coin or a page-only embed. */
@@ -456,9 +469,8 @@ export function fresh(now: Mint[], seen: Set<string>): Mint[] {
   return now.filter((m) => !seen.has(m.key));
 }
 
-/** UTC hour after which the daily note goes out; -1 turns it off. */
 /** UTC hours at which the promos go out, one collection each; empty turns them off. */
-let promoHours: number[] = [14];
+let promoHours: number[] = [8, 14, 20];
 let announceMints = false;
 const status: Omit<AnnouncerStatus, "llm"> = { enabled: false, auth: null, fc: { fid: null, posted: 0, failed: 0, lastError: null }, dryRun: false, seeded: false, seen: 0, posted: 0, failed: 0, lastPostAt: null, lastError: null };
 export const announcerStatus = (): AnnouncerStatus => ({ ...status, fc: { ...status.fc }, seen: queue?.summary().jobs ?? 0, llm: llmStatus() });
@@ -514,7 +526,7 @@ async function runRound(auth: Auth | null, file?: string, fc: Fc | null = null):
       const recentPosts = Object.values(q.state.jobs).filter(j => j !== job && j.text).slice(-12).map(j => j.text!);
       job.text = dry || job.mint.slug === "one" ? job.mint.text : (await llmPost({ ...job.mint.brief, recentPosts })) ?? job.mint.text;
     }
-    if (fc && !job.fcBody && !dry) job.fcBody = Buffer.from(await buildCast(fc,castText(job.text,job.mint.brief.url),[job.mint.image,job.mint.brief.url].filter(Boolean))).toString('base64');
+    if (fc && !job.fcBody && !dry) job.fcBody = Buffer.from(await buildCast(fc,castText(job.text,job.mint.brief.url),[job.mint.image,job.mint.brief.url].filter(Boolean),CHANNELS[job.mint.slug])).toString('base64');
   }, {
     x: dry ? async(job) => { console.log('announce (dry run): ' + job.text); out.push(job.mint); return 'dry-run'; } : auth ? async(job) => {
       let id: string; try { id = await post(auth,{...job.mint,text:job.text!}); } catch(e) { status.failed++; status.lastError = "X delivery failed; see delivery queue"; throw e; } status.posted++; status.lastPostAt = new Date().toISOString(); out.push(job.mint); return id;
@@ -527,7 +539,7 @@ async function runRound(auth: Auth | null, file?: string, fc: Fc | null = null):
 export function editorialSettings(env: Record<string, string | undefined>) {
   return {
     announceMints: env.ANNOUNCE_MINTS === "1",
-    promoHours: [...new Set((env.ANNOUNCE_PROMO_HOURS_UTC ?? "14").split(",").filter(s => s.trim() !== "").map(s => Number(s.trim())).filter(n => Number.isInteger(n) && n >= 0 && n < 24))].sort((a, b) => a - b),
+    promoHours: [...new Set((env.ANNOUNCE_PROMO_HOURS_UTC ?? "8,14,20").split(",").filter(s => s.trim() !== "").map(s => Number(s.trim())).filter(n => Number.isInteger(n) && n >= 0 && n < 24))].sort((a, b) => a - b),
   };
 }
 
