@@ -223,10 +223,33 @@ const HYPE = [
   "evening: the UTC day is running out; use the real countdown from the facts, say what is still free or what drops at midnight",
 ];
 
-/** The scheduled post of a slot: a loud template that stands on its own, and the brief for the model. ONE keeps its plain template. */
+/**
+ * ONE's scheduled posts: how the coin is built, one detail at a time, then
+ * the warning. Written by hand and rotated, never by the model, so the loss
+ * warning and the absence of any promise cannot drift.
+ */
+export function onePromo(c: Collection, j: unknown, turn: number): string {
+  const s = isObj(j) ? j : {};
+  const minted = count(s.totalSupply), size = count(s.seriesSize) ?? 25000, masters = count(s.mastersPerSeries) ?? 50, left = count(s.mastersLeft);
+  const leads = [
+    `🎲 Chainlink VRF draws every ONE coin. ${masters} Master Coins hide in each series of ${num(size)}, and a 5 USDC coin can be one. Backing size never changes the odds!`,
+    "🪙 Every ONE coin carries its own backing: 5, 10, 25 or 50 USDC held as vault shares. Burn the coin after 30 days and redeem them, minus a fee on positive yield.",
+    "💫 The ring around a ONE coin is drawn on chain from its yield: orbits, ticks and glow. It never shrinks, and a transfer does not reset it.",
+    minted !== null && left !== null
+      ? `🔎 ${num(minted)} of ${num(size)} ONE coins minted, ${left} of ${masters} Master Coins still unfound. The seed picks the art, the USDC only backs it. Two separate axes!`
+      : "🔎 Art and capital are two separate axes in ONE: a seed picks the coin, the USDC only backs it. No pay to rarity!",
+  ];
+  return fit([leads[((turn % leads.length) + leads.length) % leads.length]!, "A paid experiment: ONE can lose you money."], `https://${c.host}`, ["#pixelart", "#onchain", "#Base", "#NFT"]);
+}
+
+/** The scheduled post of a slot: a loud template that stands on its own, and the brief for the model. ONE rotates its hand-written posts. */
 export function editorialBrief(c: Collection, j: unknown, slot = 0, now = Date.now()): { text: string; brief: Brief } | null {
   const p = promoBrief(c, j, slot, now);
-  if (!p || c.kind === "coins") return p;
+  if (!p) return p;
+  if (c.kind === "coins") {
+    const text = onePromo(c, j, Math.floor(now / 86400000) + slot);
+    return { text, brief: { ...p.brief, reference: text } };
+  }
   const lead = p.brief.facts.split("\n")[0]!;
   const i = ((slot % 3) + 3) % 3;
   const daily = [

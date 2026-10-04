@@ -150,7 +150,15 @@ test("the scheduled fallback is loud, differs per slot, carries the countdown an
     }
   }
   expect(editorialBrief(knot, { day: 27, state: "free", startsAt: start }, 2, now).text).toContain("10 hours left");
-  expect(editorialBrief(one, {}, 0, now).text).not.toMatch(/\p{Extended_Pictographic}|!/u);
+  const { onePromo } = require("./announce.ts");
+  const ones = [0, 1, 2, 3].flatMap(turn => [onePromo(one, {}, turn), onePromo(one, { totalSupply: 24999, seriesSize: 25000, mastersPerSeries: 50, mastersLeft: 50 }, turn)]);
+  expect(new Set(ones).size).toBe(5);
+  for (const text of ones) {
+    expect(text).toContain("ONE can lose you money.");
+    expect(text).toContain("\nhttps://one.onenft.click\n#pixelart #onchain #Base #NFT");
+    expect(text).not.toMatch(/\bfree\b|profit|earn|return|guarante/i);
+    expect(xLength(text)).toBeLessThanOrEqual(280);
+  }
   expect(promoImage(one, {})).toBe("");
   expect(promoImage(one, { recent: [{ id: 4 }, { id: 9 }] })).toBe("https://one.onenft.click/coin/9-1024.png");
   expect(promoImage(faces, {})).toBe("https://faces.onenft.click/today.png");

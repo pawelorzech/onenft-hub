@@ -92,7 +92,9 @@ above. Mint reports stay opt-in (`ANNOUNCE_MINTS=0`).
   returns, wallet addresses, mentions and foreign links are still rejected.
   The community reply persona (`COMMUNITY_VOICE`) no longer feeds this prompt;
   replies keep their reviewed, calm answers.
-- ONE is unchanged: deterministic template, the loss warning, no model, no emoji.
+- ONE rotates four hand-written posts (`onePromo` in `src/announce.ts`) about how
+  the coin is built: the VRF draw, the backing, the yield ring, the live count.
+  Each ends with `ONE can lose you money.` No model, no promise of a return.
 - Casts keep the tag line. Farcaster text is the post without the link line.
 - Channels: `CHANNELS` in `src/announce.ts` sends Knot and Faces to `cryptoart`
   and Blit and Chain Run to `cc0`, both open to any caster on 2026-10-05. ONE
