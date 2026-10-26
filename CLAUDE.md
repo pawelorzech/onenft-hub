@@ -1,6 +1,8 @@
 # onenft.click (hub)
 
-The landing at the root of onenft.click, listing every daily collection: knot (`~/Programowanie/onenft/knot`), blit (`~/Programowanie/onenft/blit`), chainrun (`~/Programowanie/onenft/chainrun`). Created 2026-09-05 when the knot moved from the root to `knot.onenft.click`. Operational identifiers live in `CLAUDE.local.md` (gitignored).
+Last verified: c4dfd94 | 2026-10-26
+
+The landing at the root of onenft.click, listing every collection (table in `src/collections.ts`). Shared rules: `../CLAUDE.md`. Created 2026-09-05 when the knot moved from the root to `knot.onenft.click`. Operational identifiers live in `CLAUDE.local.md` (gitignored).
 
 ## What this is
 
@@ -11,11 +13,11 @@ The landing at the root of onenft.click, listing every daily collection: knot (`
 - `/wallet` and `/wallet/<address or name.eth>` (plus `/api/wallet/<who>.json`) show one wallet across every collection. The hub reads each site's `/api/holder/<who>` (`src/state.ts`, `walletOf`), normalizes `days` (daily) and `faces` (rolls) into one token list (`tokensOf`), and downloads PNG/JPEG in the browser from the cross-origin SVG (`downloadScript`, copied from the knot; keep the two in step). Collections resolve ENS themselves, so the hub still has no chain code.
 - Order on every page = order of `COLLECTIONS`: Faces first (Paweł, 2026-09-05), then ONE (2026-09-06, kind `coins`, `preview: true` until its contract is live: shown, never announced), then Knot, Blit, Chain Run.
 - Colors come from the knot's `palette.bg` and `palette.cord`. Fallback near-black on near-white only when the knot does not answer. No light/dark toggle, ever.
-- Same copy rules as the collections: English, plain words, active voice, no adverbs, no em dashes. Same anti-slop design rules.
+- Same copy and anti-slop design rules as the collections (`../CLAUDE.md`).
 
 ## Commands
 
-- `bun test` (9 tests) · `PORT=3000 bun run src/server.ts`.
+- `bun test` · `bun run typecheck` · `scripts/gate.sh` (full gate) · `PORT=3000 bun run src/server.ts`.
 - Deploy = `git push origin master`, then trigger the Coolify redeploy (see `CLAUDE.local.md`).
 
 ## Frontend Theme
