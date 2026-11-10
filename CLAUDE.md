@@ -2,6 +2,8 @@
 
 Last verified: c4dfd94 | 2026-10-26
 
+This codebase is yours: what it's for and how it's built are your call, and you'll keep building on it.
+
 The landing at the root of onenft.click, listing every collection (table in `src/collections.ts`). Shared rules: `../CLAUDE.md`. Created 2026-09-05 when the knot moved from the root to `knot.onenft.click`. Operational identifiers live in `CLAUDE.local.md` (gitignored).
 
 ## What this is
